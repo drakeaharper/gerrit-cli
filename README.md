@@ -125,8 +125,12 @@ Show comprehensive information about a change including files, reviewers, and sc
 ### `gerry fetch <change-id> [patchset]`
 Fetch a change and checkout to FETCH_HEAD. If patchset is not specified, fetches the current patch set.
 
-### `gerry cherry-pick <change-id> [patchset]`
+### `gerry cherry <change-id> [patchset]`
 Fetch and cherry-pick a change. If patchset is not specified, uses the current patch set.
+- `--no-commit`: Don't commit the cherry-pick
+- `--no-verify`: Skip git hooks during cherry-pick
+
+Also available as `gerry cherry-pick` for familiarity with git.
 
 ### `gerry update`
 Update gerry to the latest version by pulling from git and rebuilding. Must be run from the source directory.
