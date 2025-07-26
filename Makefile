@@ -42,7 +42,24 @@ deps:
 	$(GOMOD) tidy
 
 install: build
+	@echo "Installing gerry..."
+	@if [ -w /usr/local/bin ]; then \
+		cp $(OUTPUT_DIR)/$(BINARY_NAME) /usr/local/bin/$(BINARY_NAME); \
+		echo "Installed to /usr/local/bin/$(BINARY_NAME)"; \
+	else \
+		mkdir -p $(HOME)/bin; \
+		cp $(OUTPUT_DIR)/$(BINARY_NAME) $(HOME)/bin/$(BINARY_NAME); \
+		echo "Installed to $(HOME)/bin/$(BINARY_NAME)"; \
+		echo "⚠️  Make sure $(HOME)/bin is in your PATH"; \
+		echo "Add this to your shell profile: export PATH=\"\$$HOME/bin:\$$PATH\""; \
+	fi
+
+install-go: build
 	$(GOINSTALL) ./cmd/gerry
+
+update: clean build install
+	@echo "✅ gerry updated successfully!"
+	@gerry version
 
 # Cross compilation
 build-linux:
@@ -73,4 +90,4 @@ vet:
 lint:
 	golangci-lint run
 
-.PHONY: all build clean test test-coverage deps install build-linux build-windows build-darwin build-all run fmt vet lint
+.PHONY: all build clean test test-coverage deps install install-go update build-linux build-windows build-darwin build-all run fmt vet lint

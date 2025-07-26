@@ -25,10 +25,13 @@ Building a Go-based CLI tool for Gerrit Code Review with the command structure `
   - [x] Test SSH connectivity
   - [x] Test REST API authentication
   - [x] Save configuration
-- [ ] `gerry list` - List changes
-  - [ ] List user's open changes
-  - [ ] Add --detailed flag
-  - [ ] Add --reviewer flag
+- [x] `gerry list` - List changes
+  - [x] List user's open changes
+  - [x] Add --detailed flag
+  - [x] Add --reviewer flag
+  - [x] Add --limit and --status flags
+  - [x] REST API and SSH fallback support
+  - [x] Colored table output with time formatting
 - [ ] `gerry comments <change-id>` - View comments
   - [ ] Fetch all comments
   - [ ] Filter unresolved comments

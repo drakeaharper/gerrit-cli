@@ -28,16 +28,14 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 
 3. **Build and install**
    ```bash
-   # Using make
-   make build
-   sudo cp bin/gerry /usr/local/bin/
-   
-   # Or using make install (installs to $GOPATH/bin)
-   make install
+   # Easy install (recommended - handles PATH automatically)
+   ./install.sh
    
    # Or manually
-   go build -o gerry cmd/gerry/main.go
-   sudo mv gerry /usr/local/bin/
+   make install
+   
+   # Or install to $GOPATH/bin using go install
+   make install-go
    ```
 
 4. **Initialize configuration**
@@ -130,6 +128,10 @@ Fetch a change and checkout to FETCH_HEAD. If patchset is not specified, fetches
 ### `gerry cherry-pick <change-id> [patchset]`
 Fetch and cherry-pick a change. If patchset is not specified, uses the current patch set.
 
+### `gerry update`
+Update gerry to the latest version by pulling from git and rebuilding. Must be run from the source directory.
+- `--skip-pull`: Skip git pull and just rebuild
+
 ## Development
 
 ### Building from Source
@@ -163,7 +165,9 @@ make deps
 ### Makefile Targets
 
 - `make build` - Build the binary for current platform
-- `make install` - Build and install to $GOPATH/bin
+- `make install` - Build and install to best available location
+- `make install-go` - Build and install to $GOPATH/bin
+- `make update` - Clean, build, and install (for development)
 - `make test` - Run all tests
 - `make test-coverage` - Run tests with coverage report
 - `make deps` - Download and tidy dependencies
