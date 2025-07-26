@@ -182,25 +182,10 @@ func getChangePrefix(changeID string) string {
 }
 
 func buildRemoteURL(cfg *config.Config) string {
-	// For HTTPS clone URL
-	if cfg.HTTPPassword != "" {
-		protocol := "https"
-		port := cfg.HTTPPort
-		if port == 0 {
-			if cfg.Port == 29418 {
-				port = 443
-			} else {
-				port = cfg.Port
-			}
-		}
-		
-		if port == 443 || port == 80 {
-			return fmt.Sprintf("%s://%s@%s", protocol, cfg.User, cfg.Server)
-		}
-		return fmt.Sprintf("%s://%s@%s:%d", protocol, cfg.User, cfg.Server, port)
+	// Prefer SSH for git operations (more reliable with SSH keys)
+	if cfg.Project != "" {
+		return fmt.Sprintf("ssh://%s@%s:%d/%s", cfg.User, cfg.Server, cfg.Port, cfg.Project)
 	}
-	
-	// Fall back to SSH
 	return fmt.Sprintf("ssh://%s@%s:%d", cfg.User, cfg.Server, cfg.Port)
 }
 
