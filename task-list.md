@@ -32,27 +32,38 @@ Building a Go-based CLI tool for Gerrit Code Review with the command structure `
   - [x] Add --limit and --status flags
   - [x] REST API and SSH fallback support
   - [x] Colored table output with time formatting
-- [ ] `gerry comments <change-id>` - View comments
-  - [ ] Fetch all comments
-  - [ ] Filter unresolved comments
-  - [ ] Format output nicely
-- [ ] `gerry details <change-id>` - Show change details
-  - [ ] Fetch change metadata
-  - [ ] Show files changed
-  - [ ] Show review scores
-- [ ] `gerry fetch <change-id>` - Fetch changes
-  - [ ] Calculate refs path
-  - [ ] Execute git fetch
-  - [ ] Checkout FETCH_HEAD
-- [ ] `gerry cherry-pick <change-id>` - Cherry-pick changes
-  - [ ] Fetch change
-  - [ ] Execute cherry-pick
+- [x] `gerry comments <change-id>` - View comments
+  - [x] Fetch all comments
+  - [x] Filter unresolved comments
+  - [x] Format output nicely
+  - [x] Group comments by file
+  - [x] Support --all flag for resolved comments
+- [x] `gerry details <change-id>` - Show change details
+  - [x] Fetch change metadata
+  - [x] Show files changed
+  - [x] Show review scores
+  - [x] Display reviewers and CC list
+  - [x] Show patch set information
+  - [x] Support --files flag for file listing
+- [x] `gerry fetch <change-id>` - Fetch changes
+  - [x] Calculate refs path
+  - [x] Execute git fetch
+  - [x] Checkout FETCH_HEAD
+  - [x] Support optional patchset specification
+  - [x] Git repository validation
+- [x] `gerry cherry <change-id>` - Cherry-pick changes (also cherry-pick)
+  - [x] Fetch change
+  - [x] Execute cherry-pick
+  - [x] Handle merge conflicts gracefully
+  - [x] Support --no-commit flag
+  - [x] Clean working directory validation
 
 ### 4. Documentation
 - [x] Update README.md with installation guide
-- [ ] Add usage examples
-- [ ] Document configuration options
-- [ ] Create man page
+- [x] Add usage examples
+- [x] Add troubleshooting section
+- [x] Document configuration options
+- [x] Create man page
 
 ### 5. Testing
 - [ ] Unit tests for config management

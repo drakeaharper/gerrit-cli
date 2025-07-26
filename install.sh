@@ -80,7 +80,16 @@ else
 fi
 
 echo ""
+echo "📖 Install man page? (y/n)"
+read -r response
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    echo "Installing man page..."
+    make install-man
+fi
+
+echo ""
 echo "🚀 Next steps:"
 echo "   1. Run: gerry init"
 echo "   2. Configure your Gerrit connection"
 echo "   3. Start using: gerry list"
+echo "   4. View help: man gerry (if man page installed)"

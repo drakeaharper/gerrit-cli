@@ -73,6 +73,85 @@ gerry init
    gerry fetch 384465
    ```
 
+## Usage Examples
+
+### Daily Workflow
+
+**Morning code review routine:**
+```bash
+# See what changes need your review
+gerry list --reviewer
+
+# Check details on an interesting change
+gerry details 384465
+
+# Read through the comments
+gerry comments 384465
+
+# Fetch the change to test locally
+gerry fetch 384465
+
+# After testing, cherry-pick it to your branch
+git checkout my-feature-branch
+gerry cherry 384465
+```
+
+**Working with your own changes:**
+```bash
+# List your open changes
+gerry list
+
+# Get detailed view with files
+gerry list --detailed
+
+# Check a specific change with file listing
+gerry details 384465 --files
+
+# View only unresolved comments
+gerry comments 384465
+
+# View all comments (resolved and unresolved)
+gerry comments 384465 --all
+```
+
+### Advanced Usage
+
+**Cherry-picking workflows:**
+```bash
+# Cherry-pick without committing (for review/modification)
+gerry cherry 384465 --no-commit
+
+# Cherry-pick a specific patchset
+gerry cherry 384465 3
+
+# Cherry-pick skipping git hooks
+gerry cherry 384465 --no-verify
+```
+
+**Fetching workflows:**
+```bash
+# Fetch without checking out (stays on current branch)
+gerry fetch 384465 --no-checkout
+
+# Fetch a specific patchset
+gerry fetch 384465 2
+
+# Fetch and skip git hooks during checkout
+gerry fetch 384465 --no-verify
+```
+
+**Using different filters:**
+```bash
+# See merged changes
+gerry list --status merged
+
+# Limit number of results
+gerry list --limit 10
+
+# Combine filters
+gerry list --reviewer --status open --limit 5
+```
+
 ## Configuration
 
 Configuration is stored in `~/.gerry/config.json`. You can also use environment variables:
@@ -171,6 +250,7 @@ make deps
 - `make build` - Build the binary for current platform
 - `make install` - Build and install to best available location
 - `make install-go` - Build and install to $GOPATH/bin
+- `make install-man` - Install man page to appropriate location
 - `make update` - Clean, build, and install (for development)
 - `make test` - Run all tests
 - `make test-coverage` - Run tests with coverage report
@@ -184,6 +264,87 @@ make deps
 - `make fmt` - Format Go code
 - `make vet` - Run go vet
 - `make lint` - Run golangci-lint (requires golangci-lint installation)
+
+## Troubleshooting
+
+### Common Issues
+
+**"Config file not found" error:**
+```bash
+# Run the setup wizard
+gerry init
+```
+
+**"Authentication failed" error:**
+```bash
+# Check your HTTP password in Gerrit Settings → HTTP Password
+# Regenerate if needed and run init again
+gerry init
+```
+
+**"Not in a git repository" error:**
+```bash
+# Make sure you're in a git repository
+git status
+
+# Or clone the repository first
+git clone <repo-url>
+cd <repo-name>
+```
+
+**"Working directory is not clean" error (cherry-pick):**
+```bash
+# Commit or stash your changes first
+git add .
+git commit -m "Work in progress"
+
+# Or stash them
+git stash
+```
+
+**SSH connection issues:**
+```bash
+# Test SSH connection manually
+ssh -p 29418 username@gerrit.server.com gerrit version
+
+# Check SSH key permissions
+chmod 600 ~/.ssh/id_rsa
+```
+
+**REST API timeout issues:**
+```bash
+# Check if the HTTP port is correct
+# Common ports: 443 (HTTPS), 8080 (HTTP)
+gerry init  # Reconfigure with correct port
+```
+
+### Getting Help
+
+**Command-specific help:**
+```bash
+gerry <command> --help
+```
+
+**Verbose output for debugging:**
+```bash
+gerry --verbose list
+```
+
+**Check version:**
+```bash
+gerry version
+```
+
+**View manual page:**
+```bash
+man gerry  # If man page is installed
+```
+
+**Update to latest version:**
+```bash
+# From source directory
+gerry update
+```
 
 ## Contributing
 

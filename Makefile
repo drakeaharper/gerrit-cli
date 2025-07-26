@@ -41,6 +41,23 @@ deps:
 	$(GOMOD) download
 	$(GOMOD) tidy
 
+# Install man page
+install-man: gerry.1
+	@echo "Installing man page..."
+	@if [ -w /usr/local/share/man/man1 ]; then \
+		cp gerry.1 /usr/local/share/man/man1/; \
+		echo "Installed man page to /usr/local/share/man/man1/gerry.1"; \
+	elif [ -w /usr/share/man/man1 ]; then \
+		cp gerry.1 /usr/share/man/man1/; \
+		echo "Installed man page to /usr/share/man/man1/gerry.1"; \
+	else \
+		mkdir -p $(HOME)/.local/share/man/man1; \
+		cp gerry.1 $(HOME)/.local/share/man/man1/; \
+		echo "Installed man page to $(HOME)/.local/share/man/man1/gerry.1"; \
+		echo "⚠️  Add $(HOME)/.local/share/man to MANPATH if needed"; \
+		echo "Add this to your shell profile: export MANPATH=\"\$$HOME/.local/share/man:\$$MANPATH\""; \
+	fi
+
 install: build
 	@echo "Installing gerry..."
 	@if [ -w /usr/local/bin ]; then \
@@ -90,4 +107,4 @@ vet:
 lint:
 	golangci-lint run
 
-.PHONY: all build clean test test-coverage deps install install-go update build-linux build-windows build-darwin build-all run fmt vet lint
+.PHONY: all build clean test test-coverage deps install install-go install-man update build-linux build-windows build-darwin build-all run fmt vet lint

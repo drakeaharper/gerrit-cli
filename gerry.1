@@ -1,0 +1,193 @@
+.TH GERRY 1 "July 2025" "gerry 1.0" "User Commands"
+.SH NAME
+gerry \- Gerrit Code Review command-line interface
+.SH SYNOPSIS
+.B gerry
+[\fIOPTION\fR]...
+\fICOMMAND\fR
+[\fIARG\fR]...
+.SH DESCRIPTION
+.B gerry
+is a command-line interface for interacting with Gerrit Code Review, designed for developers who prefer terminal workflows over web interfaces.
+
+The tool provides easy access to common Gerrit operations including listing changes, viewing comments, fetching changes locally, and cherry-picking changes into your working branch.
+.SH GLOBAL OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show help information
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose output
+.TP
+.BR \-\-config " \fIFILE\fR"
+Use alternate configuration file
+.SH COMMANDS
+.SS gerry init
+Interactive setup wizard that configures your Gerrit connection.
+.P
+Prompts for server details, tests SSH connectivity and REST API authentication, then saves the configuration to ~/.gerry/config.json.
+.SS gerry list [OPTIONS]
+List your open changes.
+.TP
+.BR \-\-detailed
+Show detailed information including patch set numbers
+.TP
+.BR \-\-reviewer
+Show changes that need your review instead of your own changes
+.TP
+.BR \-\-limit " \fINUMBER\fR"
+Limit the number of results (default: 25)
+.TP
+.BR \-\-status " \fISTATUS\fR"
+Filter by change status (open, merged, abandoned)
+.SS gerry comments \fICHANGE-ID\fR [OPTIONS]
+View comments on a specific change.
+.TP
+.BR \-\-all
+Show all comments including resolved ones (default: unresolved only)
+.P
+Comments are grouped by file and formatted for easy reading in the terminal.
+.SS gerry details \fICHANGE-ID\fR [OPTIONS]
+Show comprehensive information about a change including files, reviewers, and scores.
+.TP
+.BR \-\-files
+Show detailed file listing with insertions/deletions
+.P
+Displays change metadata, review scores, reviewers, CC list, and patch set information.
+.SS gerry fetch \fICHANGE-ID\fR [\fIPATCHSET\fR] [OPTIONS]
+Fetch a change and checkout to FETCH_HEAD.
+.TP
+.BR \-c ", " \-\-checkout
+Checkout to FETCH_HEAD after fetching (default: true)
+.TP
+.BR \-\-no-checkout
+Skip checkout, only fetch the change
+.TP
+.BR \-\-no-verify
+Skip git hooks during checkout
+.P
+If patchset is not specified, fetches the current patch set. Requires being in a git repository.
+.SS gerry cherry \fICHANGE-ID\fR [\fIPATCHSET\fR] [OPTIONS]
+.SS gerry cherry-pick \fICHANGE-ID\fR [\fIPATCHSET\fR] [OPTIONS]
+Fetch and cherry-pick a change.
+.TP
+.BR \-n ", " \-\-no-commit
+Don't commit the cherry-pick, leaving changes staged
+.TP
+.BR \-\-no-verify
+Skip git hooks during cherry-pick
+.P
+If patchset is not specified, uses the current patch set. Requires a clean working directory and being in a git repository. On conflicts, provides helpful guidance for resolution.
+.SS gerry update [OPTIONS]
+Update gerry to the latest version.
+.TP
+.BR \-\-skip-pull
+Skip git pull and just rebuild from current source
+.P
+Must be run from the source directory. Pulls latest changes from git and rebuilds the binary.
+.SS gerry version
+Show version information.
+.SH CONFIGURATION
+Configuration is stored in
+.I ~/.gerry/config.json
+and can be initialized with
+.BR "gerry init" .
+
+Environment variables take precedence over configuration file values:
+.TP
+.B GERRIT_SERVER
+Gerrit server hostname
+.TP
+.B GERRIT_PORT
+SSH port (default: 29418)
+.TP
+.B GERRIT_USER
+Your Gerrit username
+.TP
+.B GERRIT_HTTP_PASSWORD
+Your HTTP password from Gerrit Settings → HTTP Password
+.TP
+.B GERRIT_PROJECT
+Default project name
+.SS Configuration File Format
+.EX
+{
+  "server": "gerrit.example.com",
+  "port": 29418,
+  "http_port": 443,
+  "user": "your-username",
+  "http_password": "your-http-password",
+  "ssh_key": "/path/to/ssh/key",
+  "project": "default-project"
+}
+.EE
+.SS Port Configuration
+.TP
+.B port
+SSH port (usually 29418)
+.TP
+.B http_port
+HTTP/HTTPS port for REST API. Common values: 443 (HTTPS), 8080 (HTTP), 8443 (HTTPS). If not specified, auto-detection attempts to determine the correct port.
+.SH EXAMPLES
+.SS Daily Workflow
+List changes requiring your review:
+.EX
+gerry list --reviewer
+.EE
+
+Check details on a change:
+.EX
+gerry details 384465
+.EE
+
+Read comments on a change:
+.EX
+gerry comments 384465
+.EE
+
+Fetch and test a change locally:
+.EX
+gerry fetch 384465
+.EE
+
+Cherry-pick a change to your branch:
+.EX
+git checkout my-feature-branch
+gerry cherry 384465
+.EE
+.SS Advanced Usage
+Cherry-pick without committing for review:
+.EX
+gerry cherry 384465 --no-commit
+.EE
+
+Cherry-pick a specific patchset:
+.EX
+gerry cherry 384465 3
+.EE
+
+List only your own open changes:
+.EX
+gerry list --detailed
+.EE
+
+View all comments including resolved ones:
+.EX
+gerry comments 384465 --all
+.EE
+.SH FILES
+.TP
+.I ~/.gerry/config.json
+User configuration file
+.SH EXIT STATUS
+.B gerry
+exits with status 0 on success, and >0 if an error occurs.
+.SH AUTHOR
+Written by Drake Harper.
+.SH BUGS
+Report bugs at: https://github.com/drakeaharper/gerrit-cli/issues
+.SH SEE ALSO
+.BR git (1),
+.BR ssh (1)
+.P
+Gerrit Code Review documentation: https://gerrit-review.googlesource.com/Documentation/
