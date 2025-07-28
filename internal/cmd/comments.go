@@ -180,20 +180,32 @@ func parseSSHComments(changeData map[string]interface{}) []Comment {
 }
 
 func displayComments(comments []Comment) {
-	// Filter unresolved comments if --all not specified
+	// Build thread structure
+	threads := buildCommentThreads(comments)
+	
+	// Mark thread resolution status for all threads
+	threads = markThreadResolution(threads)
+	
+	// Filter unresolved threads if --all not specified
 	if !showAll {
-		var filtered []Comment
-		for _, comment := range comments {
-			if comment.Unresolved {
-				filtered = append(filtered, comment)
+		unresolvedThreads := [][]Comment{}
+		for _, thread := range threads {
+			if len(thread) > 0 && thread[0].Unresolved {
+				unresolvedThreads = append(unresolvedThreads, thread)
 			}
 		}
-		comments = filtered
+		threads = unresolvedThreads
 		
-		if len(comments) == 0 {
-			fmt.Println("No unresolved comments found. Use --all to show all comments.")
+		if len(threads) == 0 {
+			fmt.Println("No unresolved comment threads found. Use --all to show all comments.")
 			return
 		}
+	}
+	
+	// Flatten threads back to comments for display
+	comments = []Comment{}
+	for _, thread := range threads {
+		comments = append(comments, thread...)
 	}
 	
 	// Sort comments by file, then line
@@ -233,7 +245,15 @@ func displayComments(comments []Comment) {
 			if comment.Updated != "" {
 				fmt.Printf(" %s %s", utils.Gray("Updated:"), utils.FormatTimeAgo(comment.Updated))
 			}
-			if comment.Unresolved {
+			if showAll {
+				// When showing all comments, display thread resolution status
+				if comment.Unresolved {
+					fmt.Printf(" %s", utils.BoldRed("[UNRESOLVED]"))
+				} else {
+					fmt.Printf(" %s", utils.Green("[RESOLVED]"))
+				}
+			} else if comment.Unresolved {
+				// When filtering, only show UNRESOLVED marker
 				fmt.Printf(" %s", utils.BoldRed("[UNRESOLVED]"))
 			}
 			fmt.Println()
@@ -248,22 +268,25 @@ func displayComments(comments []Comment) {
 		}
 	}
 	
-	// Summary
-	unresolvedCount := 0
-	for _, comment := range comments {
-		if comment.Unresolved {
-			unresolvedCount++
+	// Summary - count threads not individual comments
+	totalThreads := len(threads)
+	unresolvedThreads := 0
+	for _, thread := range threads {
+		if len(thread) > 0 && thread[0].Unresolved {
+			unresolvedThreads++
 		}
 	}
 	
 	if showAll {
-		fmt.Printf("Total comments: %s", utils.BoldWhite(fmt.Sprintf("%d", len(comments))))
-		if unresolvedCount > 0 {
-			fmt.Printf(" (%s unresolved)", utils.BoldRed(fmt.Sprintf("%d", unresolvedCount)))
+		fmt.Printf("Total threads: %s", utils.BoldWhite(fmt.Sprintf("%d", totalThreads)))
+		if unresolvedThreads > 0 {
+			fmt.Printf(" (%s unresolved, %s resolved)", 
+				utils.BoldRed(fmt.Sprintf("%d", unresolvedThreads)),
+				utils.Green(fmt.Sprintf("%d", totalThreads-unresolvedThreads)))
 		}
 		fmt.Println()
 	} else {
-		fmt.Printf("Unresolved comments: %s\n", utils.BoldRed(fmt.Sprintf("%d", len(comments))))
+		fmt.Printf("Unresolved threads: %s\n", utils.BoldRed(fmt.Sprintf("%d", totalThreads)))
 	}
 }
 
@@ -278,4 +301,52 @@ func getAuthorName(author map[string]interface{}) string {
 		return email
 	}
 	return "unknown"
+}
+
+// buildCommentThreads groups comments into threads based on file and line number
+func buildCommentThreads(comments []Comment) [][]Comment {
+	// Group comments by file and line number
+	threadMap := make(map[string][]Comment)
+	
+	for _, comment := range comments {
+		// Comments on the same file and line are part of the same thread
+		threadKey := fmt.Sprintf("%s:%d", comment.File, comment.Line)
+		threadMap[threadKey] = append(threadMap[threadKey], comment)
+	}
+	
+	// Convert map to slice of threads and sort each thread by timestamp
+	threads := [][]Comment{}
+	for _, thread := range threadMap {
+		// Sort thread by timestamp (oldest first)
+		sort.Slice(thread, func(i, j int) bool {
+			return thread[i].Updated < thread[j].Updated
+		})
+		threads = append(threads, thread)
+	}
+	
+	return threads
+}
+
+// markThreadResolution marks the resolution status of each thread based on its last comment
+func markThreadResolution(threads [][]Comment) [][]Comment {
+	for _, thread := range threads {
+		if len(thread) == 0 {
+			continue
+		}
+		
+		// Thread is already sorted by timestamp, so last comment is most recent
+		lastComment := thread[len(thread)-1]
+		
+		// A thread is considered resolved if:
+		// 1. The last comment is explicitly marked as resolved (!Unresolved)
+		// 2. The last comment's message is "Done" (case-insensitive)
+		isResolved := !lastComment.Unresolved || strings.EqualFold(strings.TrimSpace(lastComment.Message), "Done")
+		
+		// Mark all comments in the thread with the thread's resolution status
+		for i := range thread {
+			thread[i].Unresolved = !isResolved
+		}
+	}
+	
+	return threads
 }
