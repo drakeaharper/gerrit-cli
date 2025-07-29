@@ -50,6 +50,8 @@ func init() {
 	rootCmd.AddCommand(detailsCmd)
 	rootCmd.AddCommand(fetchCmd)
 	rootCmd.AddCommand(cherryPickCmd)
+	rootCmd.AddCommand(treeCmd)
+	rootCmd.AddCommand(treesCmd)
 }
 
 func initConfig() {
