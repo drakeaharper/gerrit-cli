@@ -24,11 +24,11 @@ This CLI tool provides easy access to common Gerrit operations including:
 Add these to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-export GERRIT_SERVER="gerrit.instructure.com"
+export GERRIT_SERVER="gerrit.company.com"
 export GERRIT_PORT="29418"
 export GERRIT_USER="your.username"
 export GERRIT_HTTP="your-http-password"
-export GERRIT_PROJECT="canvas-lms"
+export GERRIT_PROJECT="your-project"
 ```
 
 ### SSH Config (Optional)
@@ -37,7 +37,7 @@ Add to `~/.ssh/config` for easier SSH access:
 
 ```
 Host gerrit
-    HostName gerrit.instructure.com
+    HostName gerrit.company.com
     Port 29418
     User your.username
 ```

@@ -50,19 +50,32 @@ var treesCmd = &cobra.Command{
 	Run:   runTrees,
 }
 
+var treeRebaseCmd = &cobra.Command{
+	Use:   "rebase [branch]",
+	Short: "Rebase current worktree",
+	Long: `Rebase the current worktree onto the specified branch or main branch.
+If no branch is specified, rebases onto the main branch.
+Must be run from within a worktree.`,
+	Args: cobra.MaximumNArgs(1),
+	Run:  runTreeRebase,
+}
+
 var (
 	worktreeBasePath string
 	forceCleanup     bool
 	worktreeName     string
+	interactiveRebase bool
 )
 
 func init() {
 	treeSetupCmd.Flags().StringVarP(&worktreeBasePath, "path", "p", "", "Base path for worktrees (default: ../worktrees)")
 	treeSetupCmd.Flags().StringVarP(&worktreeName, "name", "n", "", "Custom name for worktree (for new work without change-id)")
 	treeCleanupCmd.Flags().BoolVarP(&forceCleanup, "force", "f", false, "Force cleanup even if worktree has uncommitted changes")
+	treeRebaseCmd.Flags().BoolVarP(&interactiveRebase, "interactive", "i", false, "Run interactive rebase")
 	
 	treeCmd.AddCommand(treeSetupCmd)
 	treeCmd.AddCommand(treeCleanupCmd)
+	treeCmd.AddCommand(treeRebaseCmd)
 }
 
 func runTreeSetup(cmd *cobra.Command, args []string) {
@@ -312,4 +325,102 @@ func getGitRepoRoot() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func runTreeRebase(cmd *cobra.Command, args []string) {
+	if !isGitRepository() {
+		utils.ExitWithError(fmt.Errorf("not in a git repository"))
+	}
+
+	// Check if we're in a worktree first
+	if !isInWorktree() {
+		utils.ExitWithError(fmt.Errorf("not in a worktree. Use this command from within a worktree directory"))
+	}
+
+	// Check for uncommitted changes
+	if hasUncommittedChanges(".") {
+		utils.ExitWithError(fmt.Errorf("you have uncommitted changes. Please commit or stash them before rebasing"))
+	}
+
+	// Determine target branch
+	targetBranch := "main"
+	if len(args) > 0 {
+		targetBranch = args[0]
+	}
+
+	// Check if target branch exists
+	if !branchExists(targetBranch) {
+		utils.ExitWithError(fmt.Errorf("target branch '%s' does not exist", targetBranch))
+	}
+
+	fmt.Printf("Rebasing current worktree onto %s...\n", utils.BoldCyan(targetBranch))
+
+	// Perform the rebase
+	var rebaseCmd *exec.Cmd
+	if interactiveRebase {
+		rebaseCmd = exec.Command("git", "rebase", "-i", targetBranch)
+	} else {
+		rebaseCmd = exec.Command("git", "rebase", targetBranch)
+	}
+
+	rebaseCmd.Stdin = os.Stdin
+	rebaseCmd.Stdout = os.Stdout
+	rebaseCmd.Stderr = os.Stderr
+
+	if err := rebaseCmd.Run(); err != nil {
+		utils.ExitWithError(fmt.Errorf("rebase failed: %w", err))
+	}
+
+	fmt.Printf("%s Rebase completed successfully\n", color.GreenString("✓"))
+}
+
+func isInWorktree() bool {
+	// Check if we're in a worktree by looking for .git file (not directory)
+	gitPath, err := os.Stat(".git")
+	if err != nil {
+		return false
+	}
+
+	// If .git is a file (not directory), we're in a worktree
+	if !gitPath.IsDir() {
+		return true
+	}
+
+	// Additional check: if we have worktrees and current dir is not main repo
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+
+	lines := strings.Split(string(output), "\n")
+	mainRepoPath := ""
+	worktreeCount := 0
+	
+	for _, line := range lines {
+		if strings.HasPrefix(line, "worktree ") {
+			worktreePath := strings.TrimPrefix(line, "worktree ")
+			worktreeCount++
+			if worktreeCount == 1 {
+				// First entry is always the main repository
+				mainRepoPath = worktreePath
+			} else if worktreePath == currentDir {
+				// We found current directory in worktree list (and it's not the main repo)
+				return true
+			}
+		}
+	}
+
+	// If current directory is the main repository and there are worktrees, we're not in a worktree
+	return currentDir != mainRepoPath && worktreeCount > 1
+}
+
+func branchExists(branch string) bool {
+	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	return cmd.Run() == nil
 }
