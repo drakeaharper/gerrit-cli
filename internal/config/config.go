@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/drakeaharper/gerrit-cli/internal/utils"
 )
 
 type Config struct {
@@ -90,6 +92,11 @@ func Load() (*Config, error) {
 }
 
 func Save(config *Config) error {
+	// Validate configuration before saving
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	
 	configDir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -110,6 +117,12 @@ func Save(config *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
+	// Warning about plain text password storage
+	if config.HTTPPassword != "" {
+		fmt.Fprintf(os.Stderr, "Warning: HTTP password will be stored in plain text at %s\n", configPath)
+		fmt.Fprintf(os.Stderr, "Consider using environment variable GERRIT_HTTP_PASSWORD instead\n")
+	}
+
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
@@ -118,15 +131,31 @@ func Save(config *Config) error {
 }
 
 func (c *Config) Validate() error {
-	if c.Server == "" {
-		return fmt.Errorf("server is required")
+	if err := utils.ValidateServerURL(c.Server); err != nil {
+		return fmt.Errorf("invalid server: %w", err)
 	}
-	if c.User == "" {
-		return fmt.Errorf("user is required")
+	
+	if err := utils.ValidateUsername(c.User); err != nil {
+		return fmt.Errorf("invalid user: %w", err)
 	}
-	if c.Port <= 0 || c.Port > 65535 {
-		return fmt.Errorf("invalid port number: %d", c.Port)
+	
+	if err := utils.ValidatePort(c.Port); err != nil {
+		return fmt.Errorf("invalid port: %w", err)
 	}
+	
+	if c.HTTPPort != 0 {
+		if err := utils.ValidatePort(c.HTTPPort); err != nil {
+			return fmt.Errorf("invalid HTTP port: %w", err)
+		}
+	}
+	
+	// Validate SSH key if specified
+	if c.SSHKey != "" {
+		if err := utils.ValidateSSHKey(c.SSHKey); err != nil {
+			return fmt.Errorf("invalid SSH key: %w", err)
+		}
+	}
+	
 	return nil
 }
 

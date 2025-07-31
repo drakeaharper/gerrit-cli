@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/drakeaharper/gerrit-cli/internal/config"
+	"github.com/drakeaharper/gerrit-cli/internal/utils"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -23,24 +24,38 @@ func NewSSHClient(cfg *config.Config) *SSHClient {
 	}
 }
 
+// ExecuteCommand executes a Gerrit command with proper argument handling
+// Deprecated: Use ExecuteCommandArgs for better security
 func (c *SSHClient) ExecuteCommand(command string) (string, error) {
+	// Parse the command to extract individual arguments
+	// This is kept for backward compatibility but should be avoided
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return "", fmt.Errorf("empty command")
+	}
+	return c.ExecuteCommandArgs(parts...)
+}
+
+// ExecuteCommandArgs executes a Gerrit command with properly separated arguments
+func (c *SSHClient) ExecuteCommandArgs(args ...string) (string, error) {
 	sshKeyPath := c.config.SSHKey
 	if sshKeyPath == "" {
 		sshKeyPath = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
 	}
 
-	// Build SSH command
-	args := []string{
+	// Build SSH command with proper argument separation
+	sshArgs := []string{
 		"-p", fmt.Sprintf("%d", c.config.Port),
 		"-i", sshKeyPath,
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "UserKnownHostsFile=~/.ssh/known_hosts",
 		fmt.Sprintf("%s@%s", c.config.User, c.config.Server),
 		"gerrit",
-		command,
 	}
+	// Append Gerrit command arguments
+	sshArgs = append(sshArgs, args...)
 
-	cmd := exec.Command("ssh", args...)
+	cmd := exec.Command("ssh", sshArgs...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -66,24 +81,36 @@ func (c *SSHClient) TestConnection() error {
 	return nil
 }
 
+// StreamCommand streams output from a Gerrit command
+// Deprecated: Use StreamCommandArgs for better security
 func (c *SSHClient) StreamCommand(command string, output io.Writer) error {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return fmt.Errorf("empty command")
+	}
+	return c.StreamCommandArgs(output, parts...)
+}
+
+// StreamCommandArgs streams output from a Gerrit command with properly separated arguments
+func (c *SSHClient) StreamCommandArgs(output io.Writer, args ...string) error {
 	sshKeyPath := c.config.SSHKey
 	if sshKeyPath == "" {
 		sshKeyPath = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
 	}
 
-	// Build SSH command
-	args := []string{
+	// Build SSH command with proper argument separation
+	sshArgs := []string{
 		"-p", fmt.Sprintf("%d", c.config.Port),
 		"-i", sshKeyPath,
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "UserKnownHostsFile=~/.ssh/known_hosts",
 		fmt.Sprintf("%s@%s", c.config.User, c.config.Server),
 		"gerrit",
-		command,
 	}
+	// Append Gerrit command arguments
+	sshArgs = append(sshArgs, args...)
 
-	cmd := exec.Command("ssh", args...)
+	cmd := exec.Command("ssh", sshArgs...)
 	cmd.Stdout = output
 	cmd.Stderr = os.Stderr
 
@@ -96,8 +123,8 @@ func (c *SSHClient) QueryChanges(query string, options ...string) (string, error
 	args = append(args, options...)
 	args = append(args, query)
 
-	command := strings.Join(args, " ")
-	return c.ExecuteCommand(command)
+	// Use the secure version with separate arguments
+	return c.ExecuteCommandArgs(args...)
 }
 
 // GetChangeDetails fetches details for a specific change
@@ -107,7 +134,7 @@ func (c *SSHClient) GetChangeDetails(changeID string) (string, error) {
 
 // GetVersion returns the Gerrit server version
 func (c *SSHClient) GetVersion() (string, error) {
-	return c.ExecuteCommand("version")
+	return c.ExecuteCommandArgs("version")
 }
 
 // CreateSSHClientFromKey creates an SSH client using golang.org/x/crypto/ssh
@@ -133,7 +160,8 @@ func (c *SSHClient) CreateSSHClientFromKey() (*ssh.Client, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		// Use secure host key verification
+		HostKeyCallback: utils.CreateSecureHostKeyCallback(),
 	}
 
 	addr := fmt.Sprintf("%s:%d", c.config.Server, c.config.Port)

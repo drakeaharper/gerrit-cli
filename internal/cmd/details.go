@@ -29,6 +29,10 @@ func init() {
 
 func runDetails(cmd *cobra.Command, args []string) {
 	changeID := args[0]
+	// Validate change ID
+	if err := utils.ValidateChangeID(changeID); err != nil {
+		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+	}
 	
 	cfg, err := config.Load()
 	if err != nil {

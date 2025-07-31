@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/drakeaharper/gerrit-cli/internal/config"
@@ -90,6 +91,19 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 			utils.ExitWithError(fmt.Errorf("failed to get repository root: %w", err))
 		}
 		worktreeBasePath = filepath.Join(filepath.Dir(repoRoot), "worktrees")
+	} else {
+		// Validate and clean user-provided path
+		repoRoot, err := getGitRepoRoot()
+		if err != nil {
+			utils.ExitWithError(fmt.Errorf("failed to get repository root: %w", err))
+		}
+		repoDir := filepath.Dir(repoRoot)
+		
+		validatedPath, err := utils.ValidateAndCleanPath(repoDir, worktreeBasePath)
+		if err != nil {
+			utils.ExitWithError(fmt.Errorf("invalid worktree path: %w", err))
+		}
+		worktreeBasePath = validatedPath
 	}
 
 	// Create worktrees directory if it doesn't exist
@@ -104,7 +118,13 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 			utils.ExitWithError(fmt.Errorf("cannot specify change-id when using --name flag"))
 		}
 		
-		worktreePath := filepath.Join(worktreeBasePath, worktreeName)
+		// Validate worktree name
+		safeName, err := utils.SanitizeFilename(worktreeName)
+		if err != nil {
+			utils.ExitWithError(fmt.Errorf("invalid worktree name: %w", err))
+		}
+		
+		worktreePath := filepath.Join(worktreeBasePath, safeName)
 		
 		// Check if worktree already exists
 		if _, err := os.Stat(worktreePath); err == nil {
@@ -139,9 +159,18 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 	}
 
 	changeID := args[0]
+	// Validate change ID
+	if err := utils.ValidateChangeID(changeID); err != nil {
+		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+	}
+	
 	patchset := ""
 	if len(args) > 1 {
 		patchset = args[1]
+		// Basic validation for patchset number
+		if patchset != "" && !regexp.MustCompile(`^\d+$`).MatchString(patchset) {
+			utils.ExitWithError(fmt.Errorf("invalid patchset number: %s", patchset))
+		}
 	}
 
 	cfg, err := config.Load()

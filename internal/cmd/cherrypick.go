@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/drakeaharper/gerrit-cli/internal/config"
@@ -33,9 +34,18 @@ func init() {
 
 func runCherryPick(cmd *cobra.Command, args []string) {
 	changeID := args[0]
+	// Validate change ID
+	if err := utils.ValidateChangeID(changeID); err != nil {
+		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+	}
+	
 	patchset := ""
 	if len(args) > 1 {
 		patchset = args[1]
+		// Basic validation for patchset number
+		if patchset != "" && !regexp.MustCompile(`^\d+$`).MatchString(patchset) {
+			utils.ExitWithError(fmt.Errorf("invalid patchset number: %s", patchset))
+		}
 	}
 
 	cfg, err := config.Load()
