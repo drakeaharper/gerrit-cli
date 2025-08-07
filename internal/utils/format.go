@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -162,6 +163,12 @@ func PadString(s string, width int) string {
 	return s + strings.Repeat(" ", width-len(s))
 }
 
+// stripANSI removes ANSI color codes from a string for accurate length calculation
+func stripANSI(s string) string {
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return ansiRegex.ReplaceAllString(s, "")
+}
+
 func FormatTable(headers []string, rows [][]string, padding int) string {
 	if len(rows) == 0 {
 		return ""
@@ -175,8 +182,10 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 	
 	for _, row := range rows {
 		for i, cell := range row {
-			if i < len(widths) && len(cell) > widths[i] {
-				widths[i] = len(cell)
+			// Use stripped length for width calculation to ignore ANSI color codes
+			cellLen := len(stripANSI(cell))
+			if i < len(widths) && cellLen > widths[i] {
+				widths[i] = cellLen
 			}
 		}
 	}
@@ -208,7 +217,14 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 				result.WriteString(strings.Repeat(" ", padding))
 			}
 			if i < len(widths) {
-				result.WriteString(PadString(cell, widths[i]))
+				// Calculate padding based on visual length, not string length
+				visualLen := len(stripANSI(cell))
+				paddingNeeded := widths[i] - visualLen
+				if paddingNeeded > 0 {
+					result.WriteString(cell + strings.Repeat(" ", paddingNeeded))
+				} else {
+					result.WriteString(cell)
+				}
 			} else {
 				result.WriteString(cell)
 			}

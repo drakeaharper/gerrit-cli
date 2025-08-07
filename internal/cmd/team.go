@@ -13,27 +13,25 @@ import (
 )
 
 var (
-	detailed   bool
-	reviewer   bool
-	listLimit  int
-	listStatus string
+	teamDetailed bool
+	teamLimit    int
+	teamStatus   string
 )
 
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List changes",
-	Long:  `List your open changes or changes that need your review.`,
-	Run:   runList,
+var teamCmd = &cobra.Command{
+	Use:   "team",
+	Short: "Show changes where you are a reviewer or CC'd",
+	Long:  `Show changes where you are either a reviewer or CC'd on.`,
+	Run:   runTeam,
 }
 
 func init() {
-	listCmd.Flags().BoolVar(&detailed, "detailed", false, "Show detailed information")
-	listCmd.Flags().BoolVar(&reviewer, "reviewer", false, "Show changes that need your review")
-	listCmd.Flags().IntVarP(&listLimit, "limit", "n", 25, "Maximum number of changes to show")
-	listCmd.Flags().StringVar(&listStatus, "status", "open", "Filter by status (open, merged, abandoned)")
+	teamCmd.Flags().BoolVar(&teamDetailed, "detailed", false, "Show detailed information")
+	teamCmd.Flags().IntVarP(&teamLimit, "limit", "n", 25, "Maximum number of changes to show")
+	teamCmd.Flags().StringVar(&teamStatus, "status", "open", "Filter by status (open, merged, abandoned)")
 }
 
-func runList(cmd *cobra.Command, args []string) {
+func runTeam(cmd *cobra.Command, args []string) {
 	cfg, err := config.Load()
 	if err != nil {
 		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
@@ -43,51 +41,56 @@ func runList(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	// Build query based on flags
+	// Build query to find changes where user is reviewer or CC'd
+	// Using the same query patterns as Gerrit web UI, but exclude merged by default
 	var query string
-	if reviewer {
-		query = fmt.Sprintf("reviewer:%s status:%s", cfg.User, listStatus)
+	if teamStatus == "open" {
+		// CC query: is:open -is:ignored -is:wip cc:self
+		// Reviewer query: is:open -owner:self -is:wip -is:ignored reviewer:self
+		// Both exclude merged changes
+		query = fmt.Sprintf("(is:open -is:ignored -is:wip -status:merged cc:%s OR is:open -owner:%s -is:wip -is:ignored -status:merged reviewer:%s)", 
+			cfg.User, cfg.User, cfg.User)
+	} else if teamStatus == "merged" {
+		// Allow merged changes if explicitly requested
+		query = fmt.Sprintf("(status:merged cc:%s OR status:merged reviewer:%s)", cfg.User, cfg.User)
 	} else {
-		query = fmt.Sprintf("owner:%s status:%s", cfg.User, listStatus)
+		// For abandoned or other statuses, exclude merged
+		query = fmt.Sprintf("(status:%s -status:merged cc:%s OR status:%s -status:merged reviewer:%s)", teamStatus, cfg.User, teamStatus, cfg.User)
 	}
 
 	utils.Debugf("Query: %s", query)
 
 	// Try REST API first, fall back to SSH if needed
-	changes, err := listChangesREST(cfg, query, listLimit)
+	changes, err := listTeamChangesREST(cfg, query, teamLimit)
 	if err != nil {
 		utils.Warnf("REST API failed: %v", err)
 		utils.Info("Falling back to SSH...")
-		changes, err = listChangesSSH(cfg, query, listLimit)
+		changes, err = listTeamChangesSSH(cfg, query, teamLimit)
 		if err != nil {
 			utils.ExitWithError(fmt.Errorf("failed to list changes: %w", err))
 		}
 	}
 
 	if len(changes) == 0 {
-		if reviewer {
-			fmt.Println("No changes found that need your review.")
-		} else {
-			fmt.Println("No changes found.")
-		}
+		fmt.Println("No changes found where you are a reviewer or CC'd.")
 		return
 	}
 
 	// Display results
-	if detailed {
-		displayDetailedChanges(changes)
+	if teamDetailed {
+		displayTeamDetailedChanges(changes)
 	} else {
-		displaySimpleChanges(changes)
+		displayTeamSimpleChanges(changes)
 	}
 }
 
-func listChangesREST(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
+func listTeamChangesREST(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
 	client := gerrit.NewRESTClient(cfg)
 	encodedQuery := url.QueryEscape(query)
 	return client.ListChanges(encodedQuery, limit)
 }
 
-func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
+func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
 	client := gerrit.NewSSHClient(cfg)
 	
 	// Build SSH query command
@@ -123,29 +126,29 @@ func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]i
 	return changes, nil
 }
 
-func displaySimpleChanges(changes []map[string]interface{}) {
+func displayTeamSimpleChanges(changes []map[string]interface{}) {
 	headers := []string{"Change", "Subject", "Status", "Verified", "Updated"}
 	var rows [][]string
 	
 	for _, change := range changes {
-		changeNum := getStringValue(change, "_number")
+		changeNum := getTeamStringValue(change, "_number")
 		if changeNum == "" {
-			changeNum = getStringValue(change, "number")
+			changeNum = getTeamStringValue(change, "number")
 		}
 		
-		subject := getStringValue(change, "subject")
+		subject := getTeamStringValue(change, "subject")
 		subject = utils.TruncateString(subject, 60)
 		
-		status := getStringValue(change, "status")
+		status := getTeamStringValue(change, "status")
 		status = utils.FormatChangeStatus(status)
 		
-		updated := getStringValue(change, "updated")
+		updated := getTeamStringValue(change, "updated")
 		if updated == "" {
-			updated = getStringValue(change, "lastUpdated")
+			updated = getTeamStringValue(change, "lastUpdated")
 		}
 		updated = utils.FormatTimeAgo(updated)
 		
-		verified := getVerifiedStatus(change)
+		verified := getTeamVerifiedStatus(change)
 		
 		rows = append(rows, []string{
 			utils.BoldCyan(changeNum),
@@ -159,27 +162,27 @@ func displaySimpleChanges(changes []map[string]interface{}) {
 	fmt.Print(utils.FormatTable(headers, rows, 2))
 }
 
-func displayDetailedChanges(changes []map[string]interface{}) {
+func displayTeamDetailedChanges(changes []map[string]interface{}) {
 	for i, change := range changes {
 		if i > 0 {
 			fmt.Println()
 		}
 		
-		changeNum := getStringValue(change, "_number")
+		changeNum := getTeamStringValue(change, "_number")
 		if changeNum == "" {
-			changeNum = getStringValue(change, "number")
+			changeNum = getTeamStringValue(change, "number")
 		}
 		
-		subject := getStringValue(change, "subject")
-		status := getStringValue(change, "status")
-		updated := getStringValue(change, "updated")
+		subject := getTeamStringValue(change, "subject")
+		status := getTeamStringValue(change, "status")
+		updated := getTeamStringValue(change, "updated")
 		if updated == "" {
-			updated = getStringValue(change, "lastUpdated")
+			updated = getTeamStringValue(change, "lastUpdated")
 		}
 		
-		project := getStringValue(change, "project")
-		branch := getStringValue(change, "branch")
-		owner := getOwnerName(change)
+		project := getTeamStringValue(change, "project")
+		branch := getTeamStringValue(change, "branch")
+		owner := getTeamOwnerName(change)
 		
 		fmt.Printf("%s %s\n", utils.BoldCyan("Change:"), utils.BoldWhite(changeNum))
 		fmt.Printf("%s %s\n", utils.BoldCyan("Subject:"), subject)
@@ -215,7 +218,8 @@ func displayDetailedChanges(changes []map[string]interface{}) {
 	}
 }
 
-func getStringValue(data map[string]interface{}, key string) string {
+
+func getTeamStringValue(data map[string]interface{}, key string) string {
 	if val, ok := data[key]; ok {
 		switch v := val.(type) {
 		case string:
@@ -231,7 +235,7 @@ func getStringValue(data map[string]interface{}, key string) string {
 	return ""
 }
 
-func getOwnerName(change map[string]interface{}) string {
+func getTeamOwnerName(change map[string]interface{}) string {
 	if owner, ok := change["owner"].(map[string]interface{}); ok {
 		if name, ok := owner["name"].(string); ok && name != "" {
 			return name
@@ -246,7 +250,7 @@ func getOwnerName(change map[string]interface{}) string {
 	return "unknown"
 }
 
-func getVerifiedStatus(change map[string]interface{}) string {
+func getTeamVerifiedStatus(change map[string]interface{}) string {
 	if labels, ok := change["labels"].(map[string]interface{}); ok {
 		if verifiedData, exists := labels["Verified"].(map[string]interface{}); exists {
 			// The most recent vote determines the status

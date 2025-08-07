@@ -46,6 +46,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(teamCmd)
 	rootCmd.AddCommand(commentsCmd)
 	rootCmd.AddCommand(detailsCmd)
 	rootCmd.AddCommand(fetchCmd)
