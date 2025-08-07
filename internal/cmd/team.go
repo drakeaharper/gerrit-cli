@@ -127,7 +127,7 @@ func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]map[stri
 }
 
 func displayTeamSimpleChanges(changes []map[string]interface{}) {
-	headers := []string{"Change", "Subject", "Status", "Verified", "Updated"}
+	headers := []string{"Change", "Subject", "Owner", "Status", "Verified", "Updated"}
 	var rows [][]string
 	
 	for _, change := range changes {
@@ -137,7 +137,9 @@ func displayTeamSimpleChanges(changes []map[string]interface{}) {
 		}
 		
 		subject := getTeamStringValue(change, "subject")
-		subject = utils.TruncateString(subject, 60)
+		subject = utils.TruncateString(subject, 45)
+		
+		owner := getTeamOwnerName(change)
 		
 		status := getTeamStringValue(change, "status")
 		status = utils.FormatChangeStatus(status)
@@ -153,6 +155,7 @@ func displayTeamSimpleChanges(changes []map[string]interface{}) {
 		rows = append(rows, []string{
 			utils.BoldCyan(changeNum),
 			subject,
+			owner,
 			status,
 			verified,
 			updated,
