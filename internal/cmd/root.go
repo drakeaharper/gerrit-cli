@@ -53,6 +53,7 @@ func init() {
 	rootCmd.AddCommand(cherryPickCmd)
 	rootCmd.AddCommand(treeCmd)
 	rootCmd.AddCommand(treesCmd)
+	rootCmd.AddCommand(failuresCmd)
 }
 
 func initConfig() {
