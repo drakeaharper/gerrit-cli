@@ -15,6 +15,7 @@ import (
 var (
 	detailed   bool
 	reviewer   bool
+	cc         bool
 	listLimit  int
 	listStatus string
 )
@@ -29,6 +30,7 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().BoolVar(&detailed, "detailed", false, "Show detailed information")
 	listCmd.Flags().BoolVar(&reviewer, "reviewer", false, "Show changes that need your review")
+	listCmd.Flags().BoolVar(&cc, "cc", false, "Show changes where you are CC'd")
 	listCmd.Flags().IntVarP(&listLimit, "limit", "n", 25, "Maximum number of changes to show")
 	listCmd.Flags().StringVar(&listStatus, "status", "open", "Filter by status (open, merged, abandoned)")
 }
@@ -47,6 +49,8 @@ func runList(cmd *cobra.Command, args []string) {
 	var query string
 	if reviewer {
 		query = fmt.Sprintf("reviewer:%s status:%s", cfg.User, listStatus)
+	} else if cc {
+		query = fmt.Sprintf("cc:%s status:%s", cfg.User, listStatus)
 	} else {
 		query = fmt.Sprintf("owner:%s status:%s", cfg.User, listStatus)
 	}
@@ -67,6 +71,8 @@ func runList(cmd *cobra.Command, args []string) {
 	if len(changes) == 0 {
 		if reviewer {
 			fmt.Println("No changes found that need your review.")
+		} else if cc {
+			fmt.Println("No changes found where you are CC'd.")
 		} else {
 			fmt.Println("No changes found.")
 		}
