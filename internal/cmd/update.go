@@ -30,17 +30,17 @@ func init() {
 
 func runUpdate(cmd *cobra.Command, args []string) {
 	fmt.Println(color.YellowString("Updating gerry..."))
-	
+
 	// Check if we're in a git repository
 	if !isGitRepo() {
 		utils.ExitWithError(fmt.Errorf("not in a git repository. Please run this command from the gerry source directory"))
 	}
-	
+
 	// Check if Makefile exists
 	if !fileExists("Makefile") {
 		utils.ExitWithError(fmt.Errorf("Makefile not found. Please run this command from the gerry source directory"))
 	}
-	
+
 	if !skipPull {
 		// Pull latest changes
 		fmt.Print("Pulling latest changes... ")
@@ -50,7 +50,7 @@ func runUpdate(cmd *cobra.Command, args []string) {
 		}
 		fmt.Println(color.GreenString("SUCCESS"))
 	}
-	
+
 	// Clean and rebuild
 	fmt.Print("Cleaning previous build... ")
 	if err := runCommand("make", "clean"); err != nil {
@@ -58,14 +58,14 @@ func runUpdate(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("failed to clean: %w", err))
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
-	
+
 	fmt.Print("Building gerry... ")
 	if err := runCommand("make", "build"); err != nil {
 		fmt.Println(color.RedString("FAILED"))
 		utils.ExitWithError(fmt.Errorf("failed to build: %w", err))
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
-	
+
 	// Install the new binary
 	fmt.Print("Installing gerry... ")
 	if err := installBinary(); err != nil {
@@ -73,7 +73,7 @@ func runUpdate(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("failed to install: %w", err))
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
-	
+
 	// Clear shell hash cache to ensure we get the new binary
 	fmt.Print("Clearing shell cache... ")
 	if err := runCommandQuiet("hash", "-r"); err != nil {
@@ -81,10 +81,10 @@ func runUpdate(cmd *cobra.Command, args []string) {
 		utils.Debugf("Failed to clear hash cache: %v", err)
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
-	
+
 	// Simple verification - just check if the binary exists and is executable
 	fmt.Print("Verifying installation... ")
-	
+
 	installPath, err := getInstallPath()
 	if err != nil {
 		fmt.Println(color.YellowString("WARNING"))
@@ -96,7 +96,7 @@ func runUpdate(cmd *cobra.Command, args []string) {
 		fmt.Println(color.GreenString("SUCCESS"))
 		fmt.Printf("Binary installed at: %s\n", installPath)
 	}
-	
+
 	fmt.Printf("\n%s gerry has been updated successfully!\n", color.GreenString("✓"))
 }
 
@@ -119,10 +119,10 @@ func runCommand(name string, args ...string) error {
 
 func installBinary() error {
 	binaryPath := "./bin/gerry"
-	
+
 	// Determine install location
 	var installPath string
-	
+
 	// Check if user has write access to /usr/local/bin
 	if isWritable("/usr/local/bin") {
 		installPath = "/usr/local/bin/gerry"
@@ -132,26 +132,26 @@ func installBinary() error {
 		if err != nil {
 			return fmt.Errorf("failed to get home directory: %w", err)
 		}
-		
+
 		userBin := filepath.Join(homeDir, "bin")
 		if err := os.MkdirAll(userBin, 0755); err != nil {
 			return fmt.Errorf("failed to create ~/bin directory: %w", err)
 		}
-		
+
 		installPath = filepath.Join(userBin, "gerry")
-		
+
 		// Warn user about PATH
 		fmt.Printf("\n%s Installing to ~/bin/gerry. Make sure ~/bin is in your PATH.\n", color.YellowString("⚠"))
 		fmt.Println("Add this to your shell profile if needed:")
 		fmt.Printf("  %s\n", utils.Cyan("export PATH=\"$HOME/bin:$PATH\""))
 	}
-	
+
 	// Copy binary
 	if runtime.GOOS == "windows" {
 		installPath += ".exe"
 		binaryPath += ".exe"
 	}
-	
+
 	// Use cp command for copying
 	return runCommandQuiet("cp", binaryPath, installPath)
 }
@@ -178,11 +178,11 @@ func getInstallPath() (string, error) {
 	if isWritable("/usr/local/bin") {
 		return "/usr/local/bin/gerry", nil
 	}
-	
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	
+
 	return filepath.Join(homeDir, "bin", "gerry"), nil
 }

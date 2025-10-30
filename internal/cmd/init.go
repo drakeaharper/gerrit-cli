@@ -22,7 +22,7 @@ var initCmd = &cobra.Command{
 
 func runInit(cmd *cobra.Command, args []string) {
 	fmt.Println(color.YellowString("Welcome to gerry setup wizard!"))
-	fmt.Println("This will guide you through setting up your Gerrit connection.\n")
+	fmt.Println("This will guide you through setting up your Gerrit connection.")
 
 	cfg := &config.Config{}
 
@@ -116,7 +116,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		if err := restClient.TestConnection(); err != nil {
 			fmt.Println(color.RedString("FAILED"))
 			fmt.Printf("Error: %v\n", err)
-			
+
 			// If auto-detect failed, suggest trying with explicit port
 			if cfg.HTTPPort == 0 {
 				fmt.Println("\nAuto-detection may have failed. Common HTTP ports are:")
@@ -125,7 +125,7 @@ func runInit(cmd *cobra.Command, args []string) {
 				fmt.Println("  - 8443 (HTTPS alternate)")
 				fmt.Println("\nYou can run 'gerry init' again to specify the HTTP port explicitly.")
 			}
-			
+
 			fmt.Println("\nREST API access will be disabled. You can update the configuration later.")
 			cfg.HTTPPassword = ""
 			cfg.HTTPPort = 0

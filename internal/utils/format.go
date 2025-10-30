@@ -7,25 +7,26 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fatih/color"
 )
 
 var (
 	// Color functions for different types of output
-	BoldWhite   = color.New(color.FgWhite, color.Bold).SprintFunc()
-	BoldGreen   = color.New(color.FgGreen, color.Bold).SprintFunc()
-	BoldRed     = color.New(color.FgRed, color.Bold).SprintFunc()
-	BoldYellow  = color.New(color.FgYellow, color.Bold).SprintFunc()
-	BoldBlue    = color.New(color.FgBlue, color.Bold).SprintFunc()
-	BoldCyan    = color.New(color.FgCyan, color.Bold).SprintFunc()
-	Green       = color.New(color.FgGreen).SprintFunc()
-	Red         = color.New(color.FgRed).SprintFunc()
-	Yellow      = color.New(color.FgYellow).SprintFunc()
-	Blue        = color.New(color.FgBlue).SprintFunc()
-	Cyan        = color.New(color.FgCyan).SprintFunc()
-	Gray        = color.New(color.FgHiBlack).SprintFunc()
-	Dim         = color.New(color.Faint).SprintFunc()
+	BoldWhite  = color.New(color.FgWhite, color.Bold).SprintFunc()
+	BoldGreen  = color.New(color.FgGreen, color.Bold).SprintFunc()
+	BoldRed    = color.New(color.FgRed, color.Bold).SprintFunc()
+	BoldYellow = color.New(color.FgYellow, color.Bold).SprintFunc()
+	BoldBlue   = color.New(color.FgBlue, color.Bold).SprintFunc()
+	BoldCyan   = color.New(color.FgCyan, color.Bold).SprintFunc()
+	Green      = color.New(color.FgGreen).SprintFunc()
+	Red        = color.New(color.FgRed).SprintFunc()
+	Yellow     = color.New(color.FgYellow).SprintFunc()
+	Blue       = color.New(color.FgBlue).SprintFunc()
+	Cyan       = color.New(color.FgCyan).SprintFunc()
+	Gray       = color.New(color.FgHiBlack).SprintFunc()
+	Dim        = color.New(color.Faint).SprintFunc()
 )
 
 func FormatChangeStatus(status string) string {
@@ -68,7 +69,7 @@ func FormatScore(label string, value interface{}) string {
 
 func FormatTimeAgo(timestamp interface{}) string {
 	var t time.Time
-	
+
 	switch v := timestamp.(type) {
 	case string:
 		// Try different time formats
@@ -92,18 +93,18 @@ func FormatTimeAgo(timestamp interface{}) string {
 	default:
 		return Gray("unknown")
 	}
-	
+
 	if t.IsZero() {
 		return Gray("unknown")
 	}
-	
+
 	return Dim(timeAgo(t))
 }
 
 func timeAgo(t time.Time) string {
 	now := time.Now()
 	diff := now.Sub(t)
-	
+
 	switch {
 	case diff < time.Minute:
 		return "just now"
@@ -157,10 +158,11 @@ func TruncateString(s string, maxLen int) string {
 }
 
 func PadString(s string, width int) string {
-	if len(s) >= width {
+	visualLen := utf8.RuneCountInString(stripANSI(s))
+	if visualLen >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-visualLen)
 }
 
 // stripANSI removes ANSI color codes from a string for accurate length calculation
@@ -173,25 +175,25 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 	if len(rows) == 0 {
 		return ""
 	}
-	
+
 	// Calculate column widths
 	widths := make([]int, len(headers))
 	for i, header := range headers {
-		widths[i] = len(header)
+		widths[i] = utf8.RuneCountInString(stripANSI(header))
 	}
-	
+
 	for _, row := range rows {
 		for i, cell := range row {
-			// Use stripped length for width calculation to ignore ANSI color codes
-			cellLen := len(stripANSI(cell))
+			// Use stripped rune count for width calculation to ignore ANSI color codes and handle UTF-8
+			cellLen := utf8.RuneCountInString(stripANSI(cell))
 			if i < len(widths) && cellLen > widths[i] {
 				widths[i] = cellLen
 			}
 		}
 	}
-	
+
 	var result strings.Builder
-	
+
 	// Headers
 	for i, header := range headers {
 		if i > 0 {
@@ -200,7 +202,7 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 		result.WriteString(BoldWhite(PadString(header, widths[i])))
 	}
 	result.WriteString("\n")
-	
+
 	// Separator
 	for i := range headers {
 		if i > 0 {
@@ -209,7 +211,7 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 		result.WriteString(strings.Repeat("-", widths[i]))
 	}
 	result.WriteString("\n")
-	
+
 	// Rows
 	for _, row := range rows {
 		for i, cell := range row {
@@ -218,7 +220,7 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 			}
 			if i < len(widths) {
 				// Calculate padding based on visual length, not string length
-				visualLen := len(stripANSI(cell))
+				visualLen := utf8.RuneCountInString(stripANSI(cell))
 				paddingNeeded := widths[i] - visualLen
 				if paddingNeeded > 0 {
 					result.WriteString(cell + strings.Repeat(" ", paddingNeeded))
@@ -231,7 +233,7 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 		}
 		result.WriteString("\n")
 	}
-	
+
 	return result.String()
 }
 

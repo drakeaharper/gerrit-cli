@@ -38,7 +38,7 @@ func runFetch(cmd *cobra.Command, args []string) {
 	if err := utils.ValidateChangeID(changeID); err != nil {
 		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
 	}
-	
+
 	patchset := ""
 	if len(args) > 1 {
 		patchset = args[1]
@@ -89,9 +89,9 @@ func runFetch(cmd *cobra.Command, args []string) {
 
 	// Get git remote URL for the server
 	remoteURL := buildRemoteURL(cfg)
-	
-	fmt.Printf("Fetching change %s (patchset %s) from %s...\n", 
-		utils.BoldCyan(changeID), 
+
+	fmt.Printf("Fetching change %s (patchset %s) from %s...\n",
+		utils.BoldCyan(changeID),
 		utils.BoldYellow(patchsetNum),
 		cfg.Server)
 
@@ -110,17 +110,17 @@ func runFetch(cmd *cobra.Command, args []string) {
 			utils.ExitWithError(fmt.Errorf("checkout failed: %w", err))
 		}
 		fmt.Println(color.GreenString("SUCCESS"))
-		
+
 		// Show current HEAD info
 		if head, err := getGitHead(); err == nil {
 			fmt.Printf("HEAD is now at %s\n", utils.Gray(head))
 		}
 	}
-	
-	fmt.Printf("\n%s Change %s is ready for review\n", 
-		color.GreenString("🎉"), 
+
+	fmt.Printf("\n%s Change %s is ready for review\n",
+		color.GreenString("🎉"),
 		utils.BoldCyan(changeID))
-	
+
 	if !checkoutFetch {
 		fmt.Println("Use 'git checkout FETCH_HEAD' to switch to the fetched change")
 	}
@@ -138,28 +138,28 @@ func getChangeForFetch(cfg *config.Config, changeID string) (map[string]interfac
 		if err != nil {
 			return nil, err
 		}
-		
+
 		lines := strings.Split(strings.TrimSpace(output), "\n")
 		for _, line := range lines {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			
+
 			var changeData map[string]interface{}
 			if err := utils.ParseJSON([]byte(line), &changeData); err != nil {
 				continue
 			}
-			
+
 			// Skip the stats line
 			if _, hasType := changeData["type"]; hasType {
 				continue
 			}
-			
+
 			return changeData, nil
 		}
 		return nil, fmt.Errorf("no valid change data found")
 	}
-	
+
 	return change, nil
 }
 
@@ -173,12 +173,12 @@ func getCurrentPatchsetNumber(change map[string]interface{}) string {
 			}
 		}
 	}
-	
+
 	// Try SSH API format
 	if currentPatchSet, ok := change["currentPatchSet"].(map[string]interface{}); ok {
 		return getStringValue(currentPatchSet, "number")
 	}
-	
+
 	// Try direct number field
 	return getStringValue(change, "number")
 }
@@ -204,7 +204,7 @@ func isGitRepository() bool {
 	if err == nil {
 		return true
 	}
-	
+
 	// Check if we're in a subdirectory of a git repo
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
 	return cmd.Run() == nil
@@ -223,7 +223,7 @@ func gitCheckout(ref string, noVerify bool) error {
 		args = append(args, "--no-verify")
 	}
 	args = append(args, ref)
-	
+
 	cmd := exec.Command("git", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

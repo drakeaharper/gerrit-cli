@@ -38,7 +38,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 	if err := utils.ValidateChangeID(changeID); err != nil {
 		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
 	}
-	
+
 	patchset := ""
 	if len(args) > 1 {
 		patchset = args[1]
@@ -95,12 +95,12 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 
 	// Get git remote URL for the server
 	remoteURL := buildRemoteURL(cfg)
-	
-	fmt.Printf("Cherry-picking change %s (patchset %s) from %s...\n", 
-		utils.BoldCyan(changeID), 
+
+	fmt.Printf("Cherry-picking change %s (patchset %s) from %s...\n",
+		utils.BoldCyan(changeID),
 		utils.BoldYellow(patchsetNum),
 		cfg.Server)
-	
+
 	if subject != "" {
 		fmt.Printf("Subject: %s\n", utils.Dim(subject))
 	}
@@ -117,7 +117,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 	fmt.Print("Cherry-picking... ")
 	if err := gitCherryPick("FETCH_HEAD", noCommit, cherryPickNoVerify); err != nil {
 		fmt.Println(color.RedString("FAILED"))
-		
+
 		// Check if it's a conflict
 		if isCherryPickConflict(err) {
 			fmt.Printf("\n%s Cherry-pick has conflicts. Resolve them and then:\n", color.YellowString("⚠"))
@@ -130,23 +130,23 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 			fmt.Println("  • Or run 'git cherry-pick --abort' to abort")
 			os.Exit(0) // Exit normally since this is expected behavior
 		}
-		
+
 		utils.ExitWithError(fmt.Errorf("cherry-pick failed: %w", err))
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
 	// Show the result
 	if noCommit {
-		fmt.Printf("\n%s Change %s has been cherry-picked (not committed)\n", 
-			color.GreenString("🎉"), 
+		fmt.Printf("\n%s Change %s has been cherry-picked (not committed)\n",
+			color.GreenString("🎉"),
 			utils.BoldCyan(changeID))
 		fmt.Println("Review the changes and commit when ready:")
 		fmt.Println("  git commit")
 	} else {
-		fmt.Printf("\n%s Change %s has been cherry-picked successfully\n", 
-			color.GreenString("🎉"), 
+		fmt.Printf("\n%s Change %s has been cherry-picked successfully\n",
+			color.GreenString("🎉"),
 			utils.BoldCyan(changeID))
-		
+
 		// Show current HEAD info
 		if head, err := getGitHead(); err == nil {
 			fmt.Printf("HEAD is now at %s\n", utils.Gray(head))
@@ -165,17 +165,17 @@ func isWorkingDirectoryClean() bool {
 
 func gitCherryPick(ref string, noCommit, noVerify bool) error {
 	args := []string{"cherry-pick"}
-	
+
 	if noCommit {
 		args = append(args, "--no-commit")
 	}
-	
+
 	if noVerify {
 		args = append(args, "--no-verify")
 	}
-	
+
 	args = append(args, ref)
-	
+
 	cmd := exec.Command("git", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

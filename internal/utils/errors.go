@@ -7,14 +7,14 @@ import (
 )
 
 var (
-	ErrConfigNotFound     = errors.New("configuration not found")
-	ErrInvalidConfig      = errors.New("invalid configuration")
-	ErrConnectionFailed   = errors.New("connection failed")
+	ErrConfigNotFound       = errors.New("configuration not found")
+	ErrInvalidConfig        = errors.New("invalid configuration")
+	ErrConnectionFailed     = errors.New("connection failed")
 	ErrAuthenticationFailed = errors.New("authentication failed")
-	ErrChangeNotFound     = errors.New("change not found")
-	ErrInvalidChangeID    = errors.New("invalid change ID")
-	ErrGitNotFound        = errors.New("git not found in PATH")
-	ErrNotGitRepo         = errors.New("not in a git repository")
+	ErrChangeNotFound       = errors.New("change not found")
+	ErrInvalidChangeID      = errors.New("invalid change ID")
+	ErrGitNotFound          = errors.New("git not found in PATH")
+	ErrNotGitRepo           = errors.New("not in a git repository")
 )
 
 type GerritError struct {

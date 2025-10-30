@@ -62,9 +62,9 @@ Must be run from within a worktree.`,
 }
 
 var (
-	worktreeBasePath string
-	forceCleanup     bool
-	worktreeName     string
+	worktreeBasePath  string
+	forceCleanup      bool
+	worktreeName      string
 	interactiveRebase bool
 )
 
@@ -73,7 +73,7 @@ func init() {
 	treeSetupCmd.Flags().StringVarP(&worktreeName, "name", "n", "", "Custom name for worktree (for new work without change-id)")
 	treeCleanupCmd.Flags().BoolVarP(&forceCleanup, "force", "f", false, "Force cleanup even if worktree has uncommitted changes")
 	treeRebaseCmd.Flags().BoolVarP(&interactiveRebase, "interactive", "i", false, "Run interactive rebase")
-	
+
 	treeCmd.AddCommand(treeSetupCmd)
 	treeCmd.AddCommand(treeCleanupCmd)
 	treeCmd.AddCommand(treeRebaseCmd)
@@ -98,7 +98,7 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 			utils.ExitWithError(fmt.Errorf("failed to get repository root: %w", err))
 		}
 		repoDir := filepath.Dir(repoRoot)
-		
+
 		validatedPath, err := utils.ValidateAndCleanPath(repoDir, worktreeBasePath)
 		if err != nil {
 			utils.ExitWithError(fmt.Errorf("invalid worktree path: %w", err))
@@ -117,15 +117,15 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 		if len(args) > 0 {
 			utils.ExitWithError(fmt.Errorf("cannot specify change-id when using --name flag"))
 		}
-		
+
 		// Validate worktree name
 		safeName, err := utils.SanitizeFilename(worktreeName)
 		if err != nil {
 			utils.ExitWithError(fmt.Errorf("invalid worktree name: %w", err))
 		}
-		
+
 		worktreePath := filepath.Join(worktreeBasePath, safeName)
-		
+
 		// Check if worktree already exists
 		if _, err := os.Stat(worktreePath); err == nil {
 			utils.ExitWithError(fmt.Errorf("worktree already exists at: %s", worktreePath))
@@ -143,7 +143,7 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 
 		fmt.Printf("\n%s Worktree created successfully!\n", color.GreenString("✓"))
 		fmt.Printf("Path: %s\n", utils.BoldGreen(worktreePath))
-		
+
 		// Change to the worktree directory
 		if err := os.Chdir(worktreePath); err != nil {
 			fmt.Printf("%s Warning: Failed to change to worktree directory: %v\n", color.YellowString("⚠"), err)
@@ -163,7 +163,7 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 	if err := utils.ValidateChangeID(changeID); err != nil {
 		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
 	}
-	
+
 	patchset := ""
 	if len(args) > 1 {
 		patchset = args[1]
@@ -204,8 +204,8 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("worktree already exists at: %s", worktreePath))
 	}
 
-	fmt.Printf("Setting up worktree for change %s (patchset %s)...\n", 
-		utils.BoldCyan(changeID), 
+	fmt.Printf("Setting up worktree for change %s (patchset %s)...\n",
+		utils.BoldCyan(changeID),
 		utils.BoldYellow(patchsetNum))
 
 	// Build the refs path
@@ -235,7 +235,7 @@ func runTreeSetup(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("\n%s Worktree created successfully!\n", color.GreenString("✓"))
 	fmt.Printf("Path: %s\n", utils.BoldGreen(worktreePath))
-	
+
 	// Change to the worktree directory
 	if err := os.Chdir(worktreePath); err != nil {
 		fmt.Printf("%s Warning: Failed to change to worktree directory: %v\n", color.YellowString("⚠"), err)
@@ -269,11 +269,11 @@ func runTreeCleanup(cmd *cobra.Command, args []string) {
 			utils.ExitWithError(fmt.Errorf("failed to get repository root: %w", err))
 		}
 		worktreeBasePath := filepath.Join(filepath.Dir(repoRoot), "worktrees")
-		
+
 		// Try as change-id first (with "change-" prefix), then as custom name
 		changeWorktreePath := filepath.Join(worktreeBasePath, fmt.Sprintf("change-%s", target))
 		customWorktreePath := filepath.Join(worktreeBasePath, target)
-		
+
 		if _, err := os.Stat(changeWorktreePath); err == nil {
 			worktreePath = changeWorktreePath
 		} else if _, err := os.Stat(customWorktreePath); err == nil {
@@ -309,7 +309,7 @@ func runTrees(cmd *cobra.Command, args []string) {
 	if !isGitRepository() {
 		utils.ExitWithError(fmt.Errorf("not in a git repository"))
 	}
-	
+
 	listWorktrees()
 }
 
@@ -430,7 +430,7 @@ func isInWorktree() bool {
 	lines := strings.Split(string(output), "\n")
 	mainRepoPath := ""
 	worktreeCount := 0
-	
+
 	for _, line := range lines {
 		if strings.HasPrefix(line, "worktree ") {
 			worktreePath := strings.TrimPrefix(line, "worktree ")

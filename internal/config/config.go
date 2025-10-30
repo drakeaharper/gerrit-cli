@@ -96,7 +96,7 @@ func Save(config *Config) error {
 	if err := config.Validate(); err != nil {
 		return err
 	}
-	
+
 	configDir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -134,28 +134,28 @@ func (c *Config) Validate() error {
 	if err := utils.ValidateServerURL(c.Server); err != nil {
 		return fmt.Errorf("invalid server: %w", err)
 	}
-	
+
 	if err := utils.ValidateUsername(c.User); err != nil {
 		return fmt.Errorf("invalid user: %w", err)
 	}
-	
+
 	if err := utils.ValidatePort(c.Port); err != nil {
 		return fmt.Errorf("invalid port: %w", err)
 	}
-	
+
 	if c.HTTPPort != 0 {
 		if err := utils.ValidatePort(c.HTTPPort); err != nil {
 			return fmt.Errorf("invalid HTTP port: %w", err)
 		}
 	}
-	
+
 	// Validate SSH key if specified
 	if c.SSHKey != "" {
 		if err := utils.ValidateSSHKey(c.SSHKey); err != nil {
 			return fmt.Errorf("invalid SSH key: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -170,7 +170,7 @@ func (c *Config) GetSSHCommand() string {
 func (c *Config) GetRESTURL(path string) string {
 	protocol := "https"
 	port := c.HTTPPort
-	
+
 	// If no HTTP port specified, try to determine it
 	if port == 0 {
 		if c.Port == 29418 {
@@ -182,7 +182,7 @@ func (c *Config) GetRESTURL(path string) string {
 			port = c.Port
 		}
 	}
-	
+
 	// Determine protocol based on port
 	switch port {
 	case 80, 8080:
@@ -193,11 +193,11 @@ func (c *Config) GetRESTURL(path string) string {
 		// Default to HTTPS for other ports
 		protocol = "https"
 	}
-	
+
 	// Don't include port in URL for standard ports
 	if (protocol == "https" && port == 443) || (protocol == "http" && port == 80) {
 		return fmt.Sprintf("%s://%s/a/%s", protocol, c.Server, path)
 	}
-	
+
 	return fmt.Sprintf("%s://%s:%d/a/%s", protocol, c.Server, port, path)
 }

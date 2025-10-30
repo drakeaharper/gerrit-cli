@@ -33,7 +33,7 @@ func runDetails(cmd *cobra.Command, args []string) {
 	if err := utils.ValidateChangeID(changeID); err != nil {
 		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
 	}
-	
+
 	cfg, err := config.Load()
 	if err != nil {
 		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
@@ -72,7 +72,7 @@ func getChangeDetailsREST(cfg *config.Config, changeID string) (map[string]inter
 
 func getChangeDetailsSSH(cfg *config.Config, changeID string) (map[string]interface{}, error) {
 	client := gerrit.NewSSHClient(cfg)
-	
+
 	// Get change details with comments
 	output, err := client.GetChangeDetails(changeID)
 	if err != nil {
@@ -81,26 +81,26 @@ func getChangeDetailsSSH(cfg *config.Config, changeID string) (map[string]interf
 
 	// Parse the JSON output
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		
+
 		var change map[string]interface{}
 		if err := utils.ParseJSON([]byte(line), &change); err != nil {
 			utils.Debugf("Failed to parse line: %s", line)
 			continue
 		}
-		
+
 		// Skip the stats line
 		if _, hasType := change["type"]; hasType {
 			continue
 		}
-		
+
 		return change, nil
 	}
-	
+
 	return nil, fmt.Errorf("no valid change data found")
 }
 
@@ -110,26 +110,26 @@ func displayChangeDetails(change map[string]interface{}, showFiles bool) {
 	if changeNum == "" {
 		changeNum = getStringValue(change, "number")
 	}
-	
+
 	subject := getStringValue(change, "subject")
 	status := getStringValue(change, "status")
 	project := getStringValue(change, "project")
 	branch := getStringValue(change, "branch")
 	topic := getStringValue(change, "topic")
-	
+
 	// Owner information
 	owner := getOwnerName(change)
-	
+
 	// Timestamps
 	created := getStringValue(change, "created")
 	updated := getStringValue(change, "updated")
 	if updated == "" {
 		updated = getStringValue(change, "lastUpdated")
 	}
-	
+
 	// URLs
 	url := getStringValue(change, "url")
-	
+
 	// Current revision info
 	currentRevision := getStringValue(change, "current_revision")
 	var patchSetNum string
@@ -138,50 +138,50 @@ func displayChangeDetails(change map[string]interface{}, showFiles bool) {
 			patchSetNum = getStringValue(currentRev, "_number")
 		}
 	}
-	
+
 	// Display basic info
 	fmt.Printf("%s %s\n", utils.BoldCyan("Change:"), utils.BoldWhite(changeNum))
 	fmt.Printf("%s %s\n", utils.BoldCyan("Subject:"), subject)
 	fmt.Printf("%s %s\n", utils.BoldCyan("Status:"), utils.FormatChangeStatus(status))
 	fmt.Printf("%s %s\n", utils.BoldCyan("Project:"), project)
 	fmt.Printf("%s %s\n", utils.BoldCyan("Branch:"), branch)
-	
+
 	if topic != "" {
 		fmt.Printf("%s %s\n", utils.BoldCyan("Topic:"), topic)
 	}
-	
+
 	fmt.Printf("%s %s\n", utils.BoldCyan("Owner:"), owner)
-	
+
 	if patchSetNum != "" {
 		fmt.Printf("%s %s\n", utils.BoldCyan("Patch Set:"), patchSetNum)
 	}
-	
+
 	if created != "" {
 		fmt.Printf("%s %s\n", utils.BoldCyan("Created:"), utils.FormatTimeAgo(created))
 	}
-	
+
 	if updated != "" {
 		fmt.Printf("%s %s\n", utils.BoldCyan("Updated:"), utils.FormatTimeAgo(updated))
 	}
-	
+
 	if url != "" {
 		fmt.Printf("%s %s\n", utils.BoldCyan("URL:"), utils.Cyan(url))
 	}
-	
+
 	// Display review labels and scores
 	fmt.Println()
 	displayReviewLabels(change)
-	
+
 	// Display reviewers
 	fmt.Println()
 	displayReviewers(change)
-	
+
 	// Display message/description
 	if message := getStringValue(change, "message"); message != "" {
 		fmt.Println()
 		fmt.Printf("%s\n", utils.BoldCyan("Description:"))
 		fmt.Println(strings.Repeat("-", 50))
-		
+
 		// Format commit message nicely
 		lines := strings.Split(message, "\n")
 		for _, line := range lines {
@@ -192,7 +192,7 @@ func displayChangeDetails(change map[string]interface{}, showFiles bool) {
 
 func displayReviewLabels(change map[string]interface{}) {
 	fmt.Printf("%s\n", utils.BoldCyan("Review Labels:"))
-	
+
 	if labels, ok := change["labels"].(map[string]interface{}); ok && len(labels) > 0 {
 		// Sort labels for consistent output
 		labelNames := make([]string, 0, len(labels))
@@ -200,12 +200,12 @@ func displayReviewLabels(change map[string]interface{}) {
 			labelNames = append(labelNames, label)
 		}
 		sort.Strings(labelNames)
-		
+
 		for _, labelName := range labelNames {
 			labelData := labels[labelName].(map[string]interface{})
-			
+
 			fmt.Printf("  %s: ", utils.BoldWhite(labelName))
-			
+
 			// Check for approved/rejected values
 			if approved, ok := labelData["approved"].(map[string]interface{}); ok {
 				if value, ok := approved["value"]; ok {
@@ -245,7 +245,7 @@ func displayReviewLabels(change map[string]interface{}) {
 
 func displayReviewers(change map[string]interface{}) {
 	fmt.Printf("%s\n", utils.BoldCyan("Reviewers:"))
-	
+
 	if reviewers, ok := change["reviewers"].(map[string]interface{}); ok {
 		if reviewerList, ok := reviewers["REVIEWER"].([]interface{}); ok && len(reviewerList) > 0 {
 			for _, reviewer := range reviewerList {
@@ -257,7 +257,7 @@ func displayReviewers(change map[string]interface{}) {
 		} else {
 			fmt.Printf("  %s\n", utils.Gray("No reviewers assigned"))
 		}
-		
+
 		if ccList, ok := reviewers["CC"].([]interface{}); ok && len(ccList) > 0 {
 			fmt.Printf("\n%s\n", utils.BoldCyan("CC:"))
 			for _, cc := range ccList {
@@ -274,14 +274,14 @@ func displayReviewers(change map[string]interface{}) {
 
 func displayChangeFiles(cfg *config.Config, changeID string, change map[string]interface{}) {
 	fmt.Printf("%s\n", utils.BoldCyan("Changed Files:"))
-	
+
 	// Get current revision
 	currentRevision := getStringValue(change, "current_revision")
 	if currentRevision == "" {
 		fmt.Printf("  %s\n", utils.Gray("Could not determine current revision"))
 		return
 	}
-	
+
 	// Try to get files via REST API
 	client := gerrit.NewRESTClient(cfg)
 	files, err := client.GetChangeFiles(changeID, currentRevision)
@@ -289,12 +289,12 @@ func displayChangeFiles(cfg *config.Config, changeID string, change map[string]i
 		fmt.Printf("  %s: %v\n", utils.Gray("Could not fetch files"), err)
 		return
 	}
-	
+
 	if len(files) == 0 {
 		fmt.Printf("  %s\n", utils.Gray("No files found"))
 		return
 	}
-	
+
 	// Sort files for consistent output
 	fileNames := make([]string, 0, len(files))
 	for fileName := range files {
@@ -303,7 +303,7 @@ func displayChangeFiles(cfg *config.Config, changeID string, change map[string]i
 		}
 	}
 	sort.Strings(fileNames)
-	
+
 	for _, fileName := range fileNames {
 		if fileData, ok := files[fileName].(map[string]interface{}); ok {
 			status := getStringValue(fileData, "status")
@@ -320,17 +320,17 @@ func displayChangeFiles(cfg *config.Config, changeID string, change map[string]i
 			default:
 				statusIcon = "  "
 			}
-			
+
 			// Show lines added/deleted if available
 			var changes string
 			if linesInserted, ok := fileData["lines_inserted"].(float64); ok {
 				if linesDeleted, ok := fileData["lines_deleted"].(float64); ok {
-					changes = fmt.Sprintf(" (%s%d %s%d)", 
+					changes = fmt.Sprintf(" (%s%d %s%d)",
 						utils.Green("+"), int(linesInserted),
 						utils.Red("-"), int(linesDeleted))
 				}
 			}
-			
+
 			fmt.Printf("  %s%s%s\n", statusIcon, fileName, changes)
 		} else {
 			fmt.Printf("  %s\n", fileName)

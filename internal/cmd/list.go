@@ -89,7 +89,7 @@ func listChangesREST(cfg *config.Config, query string, limit int) ([]map[string]
 
 func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
 	client := gerrit.NewSSHClient(cfg)
-	
+
 	// Build SSH query command
 	sshQuery := fmt.Sprintf("query --format=JSON --current-patch-set limit:%d %s", limit, query)
 	output, err := client.ExecuteCommand(sshQuery)
@@ -100,62 +100,62 @@ func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]i
 	// Parse JSON lines output
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var changes []map[string]interface{}
-	
+
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		
+
 		var change map[string]interface{}
 		if err := utils.ParseJSON([]byte(line), &change); err != nil {
 			utils.Debugf("Failed to parse line: %s", line)
 			continue
 		}
-		
+
 		// Skip the stats line
 		if _, hasType := change["type"]; hasType {
 			continue
 		}
-		
+
 		changes = append(changes, change)
 	}
-	
+
 	return changes, nil
 }
 
 func displaySimpleChanges(changes []map[string]interface{}) {
-	headers := []string{"Change", "Subject", "Status", "Verified", "Updated"}
+	headers := []string{"Change", "Subject", "CR", "QR", "Verified", "Updated"}
 	var rows [][]string
-	
+
 	for _, change := range changes {
 		changeNum := getStringValue(change, "_number")
 		if changeNum == "" {
 			changeNum = getStringValue(change, "number")
 		}
-		
+
 		subject := getStringValue(change, "subject")
 		subject = utils.TruncateString(subject, 60)
-		
-		status := getStringValue(change, "status")
-		status = utils.FormatChangeStatus(status)
-		
+
 		updated := getStringValue(change, "updated")
 		if updated == "" {
 			updated = getStringValue(change, "lastUpdated")
 		}
 		updated = utils.FormatTimeAgo(updated)
-		
+
+		codeReview := getCodeReviewStatus(change)
+		qr := getQRStatus(change)
 		verified := getVerifiedStatus(change)
-		
+
 		rows = append(rows, []string{
 			utils.BoldCyan(changeNum),
 			subject,
-			status,
+			codeReview,
+			qr,
 			verified,
 			updated,
 		})
 	}
-	
+
 	fmt.Print(utils.FormatTable(headers, rows, 2))
 }
 
@@ -164,23 +164,23 @@ func displayDetailedChanges(changes []map[string]interface{}) {
 		if i > 0 {
 			fmt.Println()
 		}
-		
+
 		changeNum := getStringValue(change, "_number")
 		if changeNum == "" {
 			changeNum = getStringValue(change, "number")
 		}
-		
+
 		subject := getStringValue(change, "subject")
 		status := getStringValue(change, "status")
 		updated := getStringValue(change, "updated")
 		if updated == "" {
 			updated = getStringValue(change, "lastUpdated")
 		}
-		
+
 		project := getStringValue(change, "project")
 		branch := getStringValue(change, "branch")
 		owner := getOwnerName(change)
-		
+
 		fmt.Printf("%s %s\n", utils.BoldCyan("Change:"), utils.BoldWhite(changeNum))
 		fmt.Printf("%s %s\n", utils.BoldCyan("Subject:"), subject)
 		fmt.Printf("%s %s\n", utils.BoldCyan("Status:"), utils.FormatChangeStatus(status))
@@ -188,7 +188,7 @@ func displayDetailedChanges(changes []map[string]interface{}) {
 		fmt.Printf("%s %s\n", utils.BoldCyan("Branch:"), branch)
 		fmt.Printf("%s %s\n", utils.BoldCyan("Owner:"), owner)
 		fmt.Printf("%s %s\n", utils.BoldCyan("Updated:"), utils.FormatTimeAgo(updated))
-		
+
 		// Show review scores if available
 		if labels, ok := change["labels"].(map[string]interface{}); ok {
 			fmt.Printf("%s ", utils.BoldCyan("Reviews:"))
@@ -244,6 +244,110 @@ func getOwnerName(change map[string]interface{}) string {
 		}
 	}
 	return "unknown"
+}
+
+func getCodeReviewStatus(change map[string]interface{}) string {
+	if labels, ok := change["labels"].(map[string]interface{}); ok {
+		if codeReviewData, exists := labels["Code-Review"].(map[string]interface{}); exists {
+			// Check if there's an approved reviewer (means +2)
+			if approved, hasApproved := codeReviewData["approved"].(map[string]interface{}); hasApproved {
+				if value, ok := approved["value"]; ok {
+					return utils.FormatScore("Code-Review", value)
+				}
+			}
+			// Check if there's a rejected reviewer (means -2 or -1)
+			if rejected, hasRejected := codeReviewData["rejected"].(map[string]interface{}); hasRejected {
+				if value, ok := rejected["value"]; ok {
+					return utils.FormatScore("Code-Review", value)
+				}
+			}
+			// Check if there are any values in the all array
+			if all, hasAll := codeReviewData["all"].([]interface{}); hasAll && len(all) > 0 {
+				// Find the highest score (but show any actual vote, including -2)
+				hasVote := false
+				maxScore := -3 // Start lower than any possible score
+				for _, vote := range all {
+					if voteMap, ok := vote.(map[string]interface{}); ok {
+						if value, ok := voteMap["value"]; ok {
+							if score, ok := value.(float64); ok {
+								hasVote = true
+								if int(score) > maxScore {
+									maxScore = int(score)
+								}
+							}
+						}
+					}
+				}
+				if hasVote {
+					return utils.FormatScore("Code-Review", maxScore)
+				}
+			}
+			// No score or 0 score
+			return utils.Gray("0")
+		}
+	}
+	// No code review status
+	return utils.Gray("—")
+}
+
+func getQRStatus(change map[string]interface{}) string {
+	if labels, ok := change["labels"].(map[string]interface{}); ok {
+		if qrData, exists := labels["QA-Review"].(map[string]interface{}); exists {
+			// Check if there's an approved reviewer (means +1)
+			if approved, hasApproved := qrData["approved"].(map[string]interface{}); hasApproved {
+				if value, ok := approved["value"]; ok {
+					return utils.FormatScore("QA-Review", value)
+				}
+			}
+			// Check if there's a rejected reviewer (means -1)
+			if rejected, hasRejected := qrData["rejected"].(map[string]interface{}); hasRejected {
+				if value, ok := rejected["value"]; ok {
+					return utils.FormatScore("QA-Review", value)
+				}
+			}
+			// Check if there are any values in the all array
+			if all, hasAll := qrData["all"].([]interface{}); hasAll && len(all) > 0 {
+				// Find the highest score (but show any actual vote, including -1)
+				hasVote := false
+				maxScore := -2 // Start lower than any possible score
+				for _, vote := range all {
+					if voteMap, ok := vote.(map[string]interface{}); ok {
+						if value, ok := voteMap["value"]; ok {
+							if score, ok := value.(float64); ok {
+								hasVote = true
+								if int(score) > maxScore {
+									maxScore = int(score)
+								}
+							}
+						}
+					}
+				}
+				if hasVote {
+					return utils.FormatScore("QA-Review", maxScore)
+				}
+			}
+			// No score or 0 score
+			return utils.Gray("0")
+		}
+	}
+	
+	// Try SSH API format (currentPatchSet.approvals)
+	if currentPatchSet, ok := change["currentPatchSet"].(map[string]interface{}); ok {
+		if approvals, ok := currentPatchSet["approvals"].([]interface{}); ok {
+			for _, approval := range approvals {
+				if approvalMap, ok := approval.(map[string]interface{}); ok {
+					if approvalType, ok := approvalMap["type"].(string); ok && approvalType == "QA-Review" {
+						if value, ok := approvalMap["value"]; ok {
+							return utils.FormatScore("QA-Review", value)
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// No QA-Review status
+	return utils.Gray("—")
 }
 
 func getVerifiedStatus(change map[string]interface{}) string {

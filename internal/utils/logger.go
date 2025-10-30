@@ -17,11 +17,11 @@ const (
 )
 
 type Logger struct {
-	level      LogLevel
-	debugLog   *log.Logger
-	infoLog    *log.Logger
-	warnLog    *log.Logger
-	errorLog   *log.Logger
+	level    LogLevel
+	debugLog *log.Logger
+	infoLog  *log.Logger
+	warnLog  *log.Logger
+	errorLog *log.Logger
 }
 
 var defaultLogger *Logger
