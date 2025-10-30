@@ -19,8 +19,9 @@ go.work
 go.work.sum
 
 # Binary output
-gerry
+/gerry
 dist/
+bin/
 
 # IDE specific files
 .idea/
