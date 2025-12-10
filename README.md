@@ -9,6 +9,7 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 - **Review Comments**: Read review comments directly in terminal with `gerry comments`
 - **Change Details**: Get comprehensive change information with `gerry details`
 - **Local Workflow**: Fetch and cherry-pick changes with `gerry fetch` and `gerry cherry-pick`
+- **Cross-Repo Analysis**: Analyze merged changes across all repositories with `gerry analyze`
 
 ## Installation
 
@@ -114,6 +115,24 @@ gerry comments 384465
 gerry comments 384465 --all
 ```
 
+### Analysis Workflows
+
+**Generate contribution reports:**
+```bash
+# Analyze all repos for the current year
+gerry analyze --start-date 2025-01-01 --end-date 2025-12-31
+
+# Analyze a specific repository
+gerry analyze --repo canvas-lms --start-date 2025-01-01
+
+# Export to different formats
+gerry analyze --start-date 2025-01-01 --format json -o report.json
+gerry analyze --start-date 2025-01-01 --format csv -o report.csv
+
+# Monthly team report
+gerry analyze --start-date 2025-11-01 --end-date 2025-11-30 -o nov_report.md
+```
+
 ### Advanced Usage
 
 **Cherry-picking workflows:**
@@ -193,6 +212,16 @@ Interactive setup wizard that configures your Gerrit connection.
 List your open changes.
 - `--detailed`: Show detailed information including patch set numbers
 - `--reviewer`: Show changes that need your review
+
+### `gerry analyze`
+Analyze merged changes across all repositories or a specific repository within a date range.
+- `--start-date`: Start date for analysis (YYYY-MM-DD)
+- `--end-date`: End date for analysis (YYYY-MM-DD)
+- `--repo`: Filter by specific repository
+- `--format`: Output format (markdown, json, csv)
+- `--output`: Save report to file
+
+See [docs/analyze_command.md](docs/analyze_command.md) for detailed usage examples.
 
 ### `gerry comments <change-id>`
 View comments on a specific change.

@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -239,4 +240,9 @@ func FormatTable(headers []string, rows [][]string, padding int) string {
 
 func ParseJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
+}
+
+func WriteFile(path string, data []byte) error {
+	// Import os package is already available
+	return os.WriteFile(path, data, 0644)
 }

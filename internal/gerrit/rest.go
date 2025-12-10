@@ -19,10 +19,14 @@ type RESTClient struct {
 }
 
 func NewRESTClient(cfg *config.Config) *RESTClient {
+	return NewRESTClientWithTimeout(cfg, 30*time.Second)
+}
+
+func NewRESTClientWithTimeout(cfg *config.Config, timeout time.Duration) *RESTClient {
 	return &RESTClient{
 		config: cfg,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }
