@@ -171,6 +171,42 @@ gerry list --limit 10
 gerry list --reviewer --status open --limit 5
 ```
 
+## Updating
+
+How you update gerry depends on how you installed it:
+
+### If installed from source (git clone)
+
+Use the built-in update command from anywhere:
+```bash
+gerry update
+```
+
+Or manually from the source directory:
+```bash
+cd gerrit-cli
+git pull
+make install
+```
+
+### If installed with go install
+
+Reinstall with the latest version:
+```bash
+go install github.com/drakeaharper/gerrit-cli/cmd/gerry@latest
+```
+
+Or install a specific version:
+```bash
+go install github.com/drakeaharper/gerrit-cli/cmd/gerry@v0.2.0
+```
+
+### Check your current version
+
+```bash
+gerry version
+```
+
 ## Configuration
 
 Configuration is stored in `~/.gerry/config.json`. You can also use environment variables:
