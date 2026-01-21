@@ -55,6 +55,7 @@ func init() {
 	rootCmd.AddCommand(treesCmd)
 	rootCmd.AddCommand(failuresCmd)
 	rootCmd.AddCommand(analyzeCmd)
+	rootCmd.AddCommand(retriggerCmd)
 }
 
 func initConfig() {

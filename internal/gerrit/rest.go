@@ -248,3 +248,14 @@ func (c *RESTClient) GetChangeMessages(changeID string) ([]map[string]interface{
 
 	return messages, nil
 }
+
+// PostReview posts a review comment on a change
+func (c *RESTClient) PostReview(changeID string, revision string, message string) error {
+	path := fmt.Sprintf("changes/%s/revisions/%s/review", changeID, revision)
+	data := map[string]interface{}{
+		"message": message,
+	}
+
+	_, err := c.Post(path, data)
+	return err
+}
