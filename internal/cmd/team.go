@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	teamDetailed bool
-	teamLimit    int
-	teamStatus   string
+	teamDetailed    bool
+	teamLimit       int
+	teamStatus      string
+	teamAllVerified bool
 )
 
 var teamCmd = &cobra.Command{
@@ -29,6 +30,7 @@ func init() {
 	teamCmd.Flags().BoolVar(&teamDetailed, "detailed", false, "Show detailed information")
 	teamCmd.Flags().IntVarP(&teamLimit, "limit", "n", 25, "Maximum number of changes to show")
 	teamCmd.Flags().StringVar(&teamStatus, "status", "open", "Filter by status (open, merged, abandoned)")
+	teamCmd.Flags().BoolVar(&teamAllVerified, "all-verified", false, "Include changes with all verified states (default: only Verified+1)")
 }
 
 func runTeam(cmd *cobra.Command, args []string) {
@@ -43,19 +45,25 @@ func runTeam(cmd *cobra.Command, args []string) {
 
 	// Build query to find changes where user is reviewer or CC'd
 	// Using the same query patterns as Gerrit web UI, but exclude merged by default
+	// By default, only show Verified+1 changes unless --all-verified is specified
+	verifiedFilter := ""
+	if !teamAllVerified {
+		verifiedFilter = " label:Verified=1"
+	}
+
 	var query string
 	if teamStatus == "open" {
 		// CC query: is:open -is:ignored -is:wip cc:self
 		// Reviewer query: is:open -owner:self -is:wip -is:ignored reviewer:self
 		// Both exclude merged changes
-		query = fmt.Sprintf("(is:open -is:ignored -is:wip -status:merged cc:%s OR is:open -owner:%s -is:wip -is:ignored -status:merged reviewer:%s)",
-			cfg.User, cfg.User, cfg.User)
+		query = fmt.Sprintf("(is:open -is:ignored -is:wip -status:merged%s cc:%s OR is:open -owner:%s -is:wip -is:ignored -status:merged%s reviewer:%s)",
+			verifiedFilter, cfg.User, cfg.User, verifiedFilter, cfg.User)
 	} else if teamStatus == "merged" {
 		// Allow merged changes if explicitly requested
-		query = fmt.Sprintf("(status:merged cc:%s OR status:merged reviewer:%s)", cfg.User, cfg.User)
+		query = fmt.Sprintf("(status:merged%s cc:%s OR status:merged%s reviewer:%s)", verifiedFilter, cfg.User, verifiedFilter, cfg.User)
 	} else {
 		// For abandoned or other statuses, exclude merged
-		query = fmt.Sprintf("(status:%s -status:merged cc:%s OR status:%s -status:merged reviewer:%s)", teamStatus, cfg.User, teamStatus, cfg.User)
+		query = fmt.Sprintf("(status:%s -status:merged%s cc:%s OR status:%s -status:merged%s reviewer:%s)", teamStatus, verifiedFilter, cfg.User, teamStatus, verifiedFilter, cfg.User)
 	}
 
 	utils.Debugf("Query: %s", query)
