@@ -83,6 +83,9 @@ gerry init
 # See what changes need your review
 gerry list --reviewer
 
+# Check changes where you're CC'd for awareness
+gerry list --cc
+
 # Check details on an interesting change
 gerry details 384465
 
@@ -163,6 +166,9 @@ gerry fetch 384465 --no-verify
 ```bash
 # See merged changes
 gerry list --status merged
+
+# See changes where you are CC'd
+gerry list --cc
 
 # Limit number of results
 gerry list --limit 10
@@ -248,6 +254,7 @@ Interactive setup wizard that configures your Gerrit connection.
 List your open changes.
 - `--detailed`: Show detailed information including patch set numbers
 - `--reviewer`: Show changes that need your review
+- `--cc`: Show changes where you are CC'd
 
 ### `gerry analyze`
 Analyze merged changes across all repositories or a specific repository within a date range.
