@@ -17,6 +17,7 @@ var (
 	teamLimit       int
 	teamStatus      string
 	teamAllVerified bool
+	teamFilter      string
 )
 
 var teamCmd = &cobra.Command{
@@ -31,6 +32,7 @@ func init() {
 	teamCmd.Flags().IntVarP(&teamLimit, "limit", "n", 25, "Maximum number of changes to show")
 	teamCmd.Flags().StringVar(&teamStatus, "status", "open", "Filter by status (open, merged, abandoned)")
 	teamCmd.Flags().BoolVar(&teamAllVerified, "all-verified", false, "Include changes with all verified states (default: only Verified+1)")
+	teamCmd.Flags().StringVarP(&teamFilter, "filter", "f", "", "Additional Gerrit query filter (e.g., 'ownerin:learning-experience' or '-owner:user@example.com')")
 }
 
 func runTeam(cmd *cobra.Command, args []string) {
@@ -64,6 +66,11 @@ func runTeam(cmd *cobra.Command, args []string) {
 	} else {
 		// For abandoned or other statuses, exclude merged
 		query = fmt.Sprintf("(status:%s -status:merged%s cc:%s OR status:%s -status:merged%s reviewer:%s)", teamStatus, verifiedFilter, cfg.User, teamStatus, verifiedFilter, cfg.User)
+	}
+
+	// Append custom filter if provided
+	if teamFilter != "" {
+		query = fmt.Sprintf("(%s) %s", query, teamFilter)
 	}
 
 	utils.Debugf("Query: %s", query)
