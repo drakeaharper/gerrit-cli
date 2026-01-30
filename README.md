@@ -6,9 +6,13 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 
 - **Easy Setup**: Interactive configuration wizard with `gerry init`
 - **List Changes**: View your open changes with `gerry list`
+- **Team Review**: See changes where you're a reviewer or CC'd with `gerry team`
+- **Share Changes**: Add reviewers and CCs to changes with `gerry share`
 - **Review Comments**: Read review comments directly in terminal with `gerry comments`
 - **Change Details**: Get comprehensive change information with `gerry details`
 - **Local Workflow**: Fetch and cherry-pick changes with `gerry fetch` and `gerry cherry-pick`
+- **Worktree Management**: Review changes in isolated worktrees with `gerry tree`
+- **Build Management**: Retrigger builds and view failures with `gerry retrigger` and `gerry failures`
 - **Cross-Repo Analysis**: Analyze merged changes across all repositories with `gerry analyze`
 
 ## Installation
@@ -80,8 +84,11 @@ gerry init
 
 **Morning code review routine:**
 ```bash
-# See what changes need your review
-gerry list --reviewer
+# See changes where you're a reviewer or CC'd
+gerry team
+
+# Filter to changes from your team
+gerry team -f "ownerin:learning-experience"
 
 # Check details on an interesting change
 gerry details 384465
@@ -95,6 +102,18 @@ gerry fetch 384465
 # After testing, cherry-pick it to your branch
 git checkout my-feature-branch
 gerry cherry 384465
+```
+
+**Sharing changes with your team:**
+```bash
+# Add your team as CC on a change
+gerry share 384465 --cc learning-experience
+
+# Add specific reviewers
+gerry share 384465 -r alice -r bob
+
+# Mix reviewers and CCs
+gerry share 384465 -r lead-reviewer --cc my-team
 ```
 
 **Working with your own changes:**
@@ -134,6 +153,30 @@ gerry analyze --start-date 2025-11-01 --end-date 2025-11-30 -o nov_report.md
 ```
 
 ### Advanced Usage
+
+**Worktree workflows:**
+```bash
+# Create an isolated worktree to review a change
+gerry tree setup 384465
+
+# List all worktrees
+gerry trees
+
+# Rebase the current worktree
+gerry tree rebase
+
+# Clean up worktrees when done
+gerry tree cleanup
+```
+
+**Build management:**
+```bash
+# Retrigger a failed build
+gerry retrigger 384465
+
+# Get the failure link to investigate
+gerry failures 384465
+```
 
 **Cherry-picking workflows:**
 ```bash
@@ -248,6 +291,28 @@ Interactive setup wizard that configures your Gerrit connection.
 List your open changes.
 - `--detailed`: Show detailed information including patch set numbers
 - `--reviewer`: Show changes that need your review
+- `--status`: Filter by status (open, merged, abandoned)
+- `--limit`: Maximum number of changes to show
+
+### `gerry team`
+Show changes where you are a reviewer or CC'd.
+- `--detailed`: Show detailed information
+- `--status`: Filter by status (open, merged, abandoned)
+- `--all-verified`: Include changes with all verified states (default: only Verified+1)
+- `-f, --filter`: Additional Gerrit query filter (e.g., `ownerin:learning-experience`)
+- `-n, --limit`: Maximum number of changes to show (default 25)
+
+### `gerry share <change-id>`
+Add reviewers or CCs to a change.
+- `-r, --reviewer`: Add reviewer (can be user or group, repeatable)
+- `--cc`: Add CC (can be user or group, repeatable)
+
+Examples:
+```bash
+gerry share 12345 -r john.doe
+gerry share 12345 --cc learning-experience
+gerry share 12345 -r alice -r bob --cc my-team
+```
 
 ### `gerry analyze`
 Analyze merged changes across all repositories or a specific repository within a date range.
@@ -275,6 +340,23 @@ Fetch and cherry-pick a change. If patchset is not specified, uses the current p
 - `--no-verify`: Skip git hooks during cherry-pick
 
 Also available as `gerry cherry-pick` for familiarity with git.
+
+### `gerry tree`
+Manage git worktrees for reviewing Gerrit changes in isolation.
+
+Subcommands:
+- `gerry tree setup <change-id>`: Create a worktree for a Gerrit change
+- `gerry tree cleanup`: Remove worktrees
+- `gerry tree rebase`: Rebase current worktree
+
+### `gerry trees`
+List all git worktrees in the current repository.
+
+### `gerry retrigger <change-id>`
+Retrigger Canvas LMS build for a change by posting a `__TRIGGER_CANVAS_LMS__` comment.
+
+### `gerry failures <change-id>`
+Get the most recent build failure link from Service Cloud Jenkins for a change.
 
 ### `gerry update`
 Update gerry to the latest version by pulling from git and rebuilding. Must be run from the source directory.
