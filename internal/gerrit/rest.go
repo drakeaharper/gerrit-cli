@@ -259,3 +259,16 @@ func (c *RESTClient) PostReview(changeID string, revision string, message string
 	_, err := c.Post(path, data)
 	return err
 }
+
+// AddReviewer adds a reviewer or CC to a change
+// state should be "REVIEWER" or "CC"
+func (c *RESTClient) AddReviewer(changeID string, reviewer string, state string) error {
+	path := fmt.Sprintf("changes/%s/reviewers", changeID)
+	data := map[string]interface{}{
+		"reviewer": reviewer,
+		"state":    state,
+	}
+
+	_, err := c.Post(path, data)
+	return err
+}

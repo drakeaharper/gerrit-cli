@@ -56,6 +56,7 @@ func init() {
 	rootCmd.AddCommand(failuresCmd)
 	rootCmd.AddCommand(analyzeCmd)
 	rootCmd.AddCommand(retriggerCmd)
+	rootCmd.AddCommand(shareCmd)
 }
 
 func initConfig() {
