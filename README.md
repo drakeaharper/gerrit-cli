@@ -269,16 +269,18 @@ Configuration is stored in `~/.gerry/config.json`. You can also use environment 
   "http_port": 8080,
   "user": "your-username",
   "http_password": "your-http-password",
-  "ssh_key": "/path/to/ssh/key",
   "project": "default-project"
 }
 ```
 
-**Note about ports:**
+**Note about configuration:**
 - `port`: SSH port (usually 29418)
 - `http_port`: HTTP/HTTPS port for REST API (common values: 443, 8080, 8443)
   - If not specified, auto-detection will try to determine the correct port
   - For SSH port 29418, it defaults to HTTPS on port 443
+- SSH key selection is handled by your SSH client configuration (`~/.ssh/config`)
+  - Ensure your SSH keys are properly configured for the Gerrit server
+  - The SSH client will use your default keys or those specified in `~/.ssh/config`
 
 Environment variables take precedence over configuration file values.
 
@@ -454,8 +456,13 @@ git stash
 # Test SSH connection manually
 ssh -p 29418 username@gerrit.server.com gerrit version
 
-# Check SSH key permissions
-chmod 600 ~/.ssh/id_rsa
+# Check SSH key permissions (for your default keys)
+chmod 600 ~/.ssh/id_rsa ~/.ssh/id_ed25519 ~/.ssh/id_ecdsa
+
+# If using a specific key, configure it in ~/.ssh/config:
+# Host gerrit.server.com
+#   IdentityFile ~/.ssh/your_key
+#   Port 29418
 ```
 
 **REST API timeout issues:**
