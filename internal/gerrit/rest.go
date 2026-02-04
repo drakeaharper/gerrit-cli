@@ -272,3 +272,30 @@ func (c *RESTClient) AddReviewer(changeID string, reviewer string, state string)
 	_, err := c.Post(path, data)
 	return err
 }
+
+// RebaseChange rebases a change onto a new base
+// base can be empty (rebase onto target branch HEAD), a commit SHA-1, or "change~patchset"
+// allowConflicts allows rebasing even with conflicts (creates conflict markers)
+func (c *RESTClient) RebaseChange(changeID string, base string, allowConflicts bool) (map[string]interface{}, error) {
+	path := fmt.Sprintf("changes/%s/rebase", changeID)
+	data := map[string]interface{}{}
+
+	if base != "" {
+		data["base"] = base
+	}
+	if allowConflicts {
+		data["allow_conflicts"] = true
+	}
+
+	resp, err := c.Post(path, data)
+	if err != nil {
+		return nil, err
+	}
+
+	var change map[string]interface{}
+	if err := json.Unmarshal(resp, &change); err != nil {
+		return nil, fmt.Errorf("failed to parse rebase response: %w", err)
+	}
+
+	return change, nil
+}

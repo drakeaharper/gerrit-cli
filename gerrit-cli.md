@@ -237,7 +237,7 @@ done
 2. **Additional Features**:
    - Post comments via CLI
    - Submit/abandon changes
-   - Rebase changes
+   - ~~Rebase changes~~ ✅ Implemented (`gerry rebase`)
    - Dashboard view with change statistics
 
 3. **Integration**:

@@ -57,6 +57,7 @@ func init() {
 	rootCmd.AddCommand(analyzeCmd)
 	rootCmd.AddCommand(retriggerCmd)
 	rootCmd.AddCommand(shareCmd)
+	rootCmd.AddCommand(rebaseCmd)
 }
 
 func initConfig() {

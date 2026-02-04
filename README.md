@@ -14,6 +14,7 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 - **Worktree Management**: Review changes in isolated worktrees with `gerry tree`
 - **Build Management**: Retrigger builds and view failures with `gerry retrigger` and `gerry failures`
 - **Cross-Repo Analysis**: Analyze merged changes across all repositories with `gerry analyze`
+- **Rebase Changes**: Trigger server-side rebase with `gerry rebase`
 
 ## Installation
 
@@ -176,6 +177,22 @@ gerry retrigger 384465
 
 # Get the failure link to investigate
 gerry failures 384465
+```
+
+**Rebasing changes:**
+```bash
+# Rebase a change onto the target branch HEAD
+gerry rebase 384465
+
+# Rebase onto a specific branch or commit
+gerry rebase 384465 --base main
+gerry rebase 384465 --base abc123def
+
+# Rebase onto another change's patchset
+gerry rebase 384465 --base 67890~2
+
+# Allow rebasing with conflicts (creates conflict markers)
+gerry rebase 384465 --allow-conflicts
 ```
 
 **Cherry-picking workflows:**
@@ -357,6 +374,19 @@ Retrigger Canvas LMS build for a change by posting a `__TRIGGER_CANVAS_LMS__` co
 
 ### `gerry failures <change-id>`
 Get the most recent build failure link from Service Cloud Jenkins for a change.
+
+### `gerry rebase <change-id>`
+Rebase a change using Gerrit's server-side rebase API.
+- `-b, --base`: Base to rebase onto (commit SHA, branch, or change~patchset)
+- `--allow-conflicts`: Allow rebasing with conflicts (creates conflict markers)
+
+Examples:
+```bash
+gerry rebase 12345
+gerry rebase 12345 --base main
+gerry rebase 12345 --base 67890~2
+gerry rebase 12345 --allow-conflicts
+```
 
 ### `gerry update`
 Update gerry to the latest version by pulling from git and rebuilding. Must be run from the source directory.
