@@ -140,26 +140,25 @@ func GetSSHKeyFingerprint(key ssh.PublicKey) string {
 }
 
 // ValidateSSHKey performs basic validation on an SSH key
+// Note: This only checks file existence and readability, not key parsing.
+// Passphrase-protected keys are handled by the system ssh command via ssh-agent.
 func ValidateSSHKey(keyPath string) error {
 	if keyPath == "" {
 		return fmt.Errorf("SSH key path cannot be empty")
 	}
 
 	// Check if file exists
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+	info, err := os.Stat(keyPath)
+	if os.IsNotExist(err) {
 		return fmt.Errorf("SSH key file does not exist: %s", keyPath)
 	}
-
-	// Try to read and parse the key
-	keyData, err := os.ReadFile(keyPath)
 	if err != nil {
-		return fmt.Errorf("failed to read SSH key: %w", err)
+		return fmt.Errorf("failed to access SSH key file: %w", err)
 	}
 
-	// Parse the private key
-	_, err = ssh.ParsePrivateKey(keyData)
-	if err != nil {
-		return fmt.Errorf("invalid SSH private key: %w", err)
+	// Check it's a file, not a directory
+	if info.IsDir() {
+		return fmt.Errorf("SSH key path is a directory, not a file: %s", keyPath)
 	}
 
 	return nil
