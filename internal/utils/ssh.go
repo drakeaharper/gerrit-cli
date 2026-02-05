@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rsa"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -159,10 +160,28 @@ func ValidateSSHKey(keyPath string) error {
 	// Parse the private key
 	_, err = ssh.ParsePrivateKey(keyData)
 	if err != nil {
+		// Passphrase-protected keys are valid - they'll work via ssh-agent at runtime
+		if isPassphraseProtectedError(err) {
+			return nil
+		}
 		return fmt.Errorf("invalid SSH private key: %w", err)
 	}
 
 	return nil
+}
+
+// isPassphraseProtectedError checks if the error indicates a passphrase-protected key
+func isPassphraseProtectedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// The x/crypto/ssh library returns this specific error for encrypted keys
+	var passphraseErr *ssh.PassphraseMissingError
+	if errors.As(err, &passphraseErr) {
+		return true
+	}
+	// Fallback: check error message for older versions or edge cases
+	return strings.Contains(err.Error(), "passphrase protected")
 }
 
 // GetSSHKeyType returns the type of SSH key (rsa, ed25519, etc.)
