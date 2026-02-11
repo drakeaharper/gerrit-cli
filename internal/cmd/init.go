@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/drakeaharper/gerrit-cli/internal/config"
@@ -56,16 +55,9 @@ func runInit(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(err)
 	}
 
-	// SSH Key
-	defaultSSHKey := filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
-	sshKeyPrompt := &survey.Input{
-		Message: "Path to SSH private key:",
-		Default: defaultSSHKey,
-		Help:    "Path to your SSH private key for Gerrit authentication",
-	}
-	if err := survey.AskOne(sshKeyPrompt, &cfg.SSHKey); err != nil {
-		utils.ExitWithError(err)
-	}
+	// Inform user about SSH key handling
+	fmt.Println("\nNote: SSH key selection will be handled by your SSH client configuration (~/.ssh/config)")
+	fmt.Println("Make sure your SSH keys are set up correctly for", cfg.Server)
 
 	// Test SSH connection
 	fmt.Print("\nTesting SSH connection... ")

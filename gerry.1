@@ -117,10 +117,13 @@ Default project name
   "http_port": 443,
   "user": "your-username",
   "http_password": "your-http-password",
-  "ssh_key": "/path/to/ssh/key",
   "project": "default-project"
 }
 .EE
+.SS Configuration Notes
+.TP
+.B SSH Key Handling
+SSH key selection is handled by your SSH client configuration (~/.ssh/config). Ensure your SSH keys are properly configured for the Gerrit server.
 .SS Port Configuration
 .TP
 .B port

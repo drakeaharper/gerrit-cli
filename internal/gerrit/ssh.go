@@ -6,12 +6,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/drakeaharper/gerrit-cli/internal/config"
-	"github.com/drakeaharper/gerrit-cli/internal/utils"
-	"golang.org/x/crypto/ssh"
 )
 
 type SSHClient struct {
@@ -38,15 +35,10 @@ func (c *SSHClient) ExecuteCommand(command string) (string, error) {
 
 // ExecuteCommandArgs executes a Gerrit command with properly separated arguments
 func (c *SSHClient) ExecuteCommandArgs(args ...string) (string, error) {
-	sshKeyPath := c.config.SSHKey
-	if sshKeyPath == "" {
-		sshKeyPath = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
-	}
-
 	// Build SSH command with proper argument separation
+	// SSH key selection is handled by SSH client configuration
 	sshArgs := []string{
 		"-p", fmt.Sprintf("%d", c.config.Port),
-		"-i", sshKeyPath,
 		"-o", "StrictHostKeyChecking=accept-new",
 		"-o", "UserKnownHostsFile=~/.ssh/known_hosts",
 		fmt.Sprintf("%s@%s", c.config.User, c.config.Server),
@@ -93,15 +85,10 @@ func (c *SSHClient) StreamCommand(command string, output io.Writer) error {
 
 // StreamCommandArgs streams output from a Gerrit command with properly separated arguments
 func (c *SSHClient) StreamCommandArgs(output io.Writer, args ...string) error {
-	sshKeyPath := c.config.SSHKey
-	if sshKeyPath == "" {
-		sshKeyPath = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
-	}
-
 	// Build SSH command with proper argument separation
+	// SSH key selection is handled by SSH client configuration
 	sshArgs := []string{
 		"-p", fmt.Sprintf("%d", c.config.Port),
-		"-i", sshKeyPath,
 		"-o", "StrictHostKeyChecking=accept-new",
 		"-o", "UserKnownHostsFile=~/.ssh/known_hosts",
 		fmt.Sprintf("%s@%s", c.config.User, c.config.Server),
@@ -135,40 +122,4 @@ func (c *SSHClient) GetChangeDetails(changeID string) (string, error) {
 // GetVersion returns the Gerrit server version
 func (c *SSHClient) GetVersion() (string, error) {
 	return c.ExecuteCommandArgs("version")
-}
-
-// CreateSSHClientFromKey creates an SSH client using golang.org/x/crypto/ssh
-// This is an alternative implementation that doesn't rely on the ssh command
-func (c *SSHClient) CreateSSHClientFromKey() (*ssh.Client, error) {
-	sshKeyPath := c.config.SSHKey
-	if sshKeyPath == "" {
-		sshKeyPath = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
-	}
-
-	key, err := os.ReadFile(sshKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read private key: %w", err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse private key: %w", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User: c.config.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-		// Use secure host key verification
-		HostKeyCallback: utils.CreateSecureHostKeyCallback(),
-	}
-
-	addr := fmt.Sprintf("%s:%d", c.config.Server, c.config.Port)
-	client, err := ssh.Dial("tcp", addr, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %w", err)
-	}
-
-	return client, nil
 }

@@ -149,22 +149,14 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Validate SSH key if specified
-	if c.SSHKey != "" {
-		if err := utils.ValidateSSHKey(c.SSHKey); err != nil {
-			return fmt.Errorf("invalid SSH key: %w", err)
-		}
-	}
+	// Note: SSH key validation removed - SSH client will handle key selection
 
 	return nil
 }
 
 func (c *Config) GetSSHCommand() string {
-	sshKey := c.SSHKey
-	if sshKey == "" {
-		sshKey = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa")
-	}
-	return fmt.Sprintf("ssh -p %d -i %s %s@%s gerrit", c.Port, sshKey, c.User, c.Server)
+	// SSH key selection is now handled by SSH client configuration
+	return fmt.Sprintf("ssh -p %d %s@%s gerrit", c.Port, c.User, c.Server)
 }
 
 func (c *Config) GetRESTURL(path string) string {
