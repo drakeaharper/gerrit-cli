@@ -142,7 +142,7 @@ func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]map[stri
 }
 
 func displayTeamSimpleChanges(changes []map[string]interface{}) {
-	headers := []string{"Change", "Subject", "Owner", "CR", "QR", "Verified", "Updated"}
+	headers := []string{"Change", "Subject", "Owner", "CR", "QR", "LR", "Verified", "Updated"}
 	var rows [][]string
 
 	for _, change := range changes {
@@ -164,6 +164,7 @@ func displayTeamSimpleChanges(changes []map[string]interface{}) {
 
 		codeReview := getTeamCodeReviewStatus(change)
 		qr := getTeamQRStatus(change)
+		lr := getTeamLintReviewStatus(change)
 		verified := getTeamVerifiedStatus(change)
 
 		rows = append(rows, []string{
@@ -172,6 +173,7 @@ func displayTeamSimpleChanges(changes []map[string]interface{}) {
 			owner,
 			codeReview,
 			qr,
+			lr,
 			verified,
 			updated,
 		})
@@ -368,6 +370,65 @@ func getTeamQRStatus(change map[string]interface{}) string {
 	}
 	
 	// No QA-Review status
+	return utils.Gray("—")
+}
+
+func getTeamLintReviewStatus(change map[string]interface{}) string {
+	if labels, ok := change["labels"].(map[string]interface{}); ok {
+		if lrData, exists := labels["Lint-Review"].(map[string]interface{}); exists {
+			// Check if there's an approved reviewer (means +1)
+			if approved, hasApproved := lrData["approved"].(map[string]interface{}); hasApproved {
+				if value, ok := approved["value"]; ok {
+					return utils.FormatScore("Lint-Review", value)
+				}
+			}
+			// Check if there's a rejected reviewer (means -1)
+			if rejected, hasRejected := lrData["rejected"].(map[string]interface{}); hasRejected {
+				if value, ok := rejected["value"]; ok {
+					return utils.FormatScore("Lint-Review", value)
+				}
+			}
+			// Check if there are any values in the all array
+			if all, hasAll := lrData["all"].([]interface{}); hasAll && len(all) > 0 {
+				hasVote := false
+				maxScore := -2
+				for _, vote := range all {
+					if voteMap, ok := vote.(map[string]interface{}); ok {
+						if value, ok := voteMap["value"]; ok {
+							if score, ok := value.(float64); ok {
+								hasVote = true
+								if int(score) > maxScore {
+									maxScore = int(score)
+								}
+							}
+						}
+					}
+				}
+				if hasVote {
+					return utils.FormatScore("Lint-Review", maxScore)
+				}
+			}
+			// No score or 0 score
+			return utils.Gray("0")
+		}
+	}
+
+	// Try SSH API format (currentPatchSet.approvals)
+	if currentPatchSet, ok := change["currentPatchSet"].(map[string]interface{}); ok {
+		if approvals, ok := currentPatchSet["approvals"].([]interface{}); ok {
+			for _, approval := range approvals {
+				if approvalMap, ok := approval.(map[string]interface{}); ok {
+					if approvalType, ok := approvalMap["type"].(string); ok && approvalType == "Lint-Review" {
+						if value, ok := approvalMap["value"]; ok {
+							return utils.FormatScore("Lint-Review", value)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// No Lint-Review status
 	return utils.Gray("—")
 }
 
