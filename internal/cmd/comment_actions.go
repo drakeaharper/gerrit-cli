@@ -186,13 +186,14 @@ func runCommentsReply(cmd *cobra.Command, args []string) {
 
 	cfg, client := loadConfigAndClient()
 
-	// Fetch all threads (need all for stable indexing)
-	threads, err := getOrderedThreads(cfg, changeID, true)
+	// Fetch unresolved threads only — matches default `gerry comments` view
+	// so that -t N indices are consistent with what the user sees
+	threads, err := getOrderedThreads(cfg, changeID, false)
 	if err != nil {
 		utils.ExitWithError(err)
 	}
 	if len(threads) == 0 {
-		fmt.Println("No comment threads found on this change.")
+		fmt.Println("No unresolved comment threads found.")
 		return
 	}
 
