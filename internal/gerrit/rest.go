@@ -260,6 +260,25 @@ func (c *RESTClient) PostReview(changeID string, revision string, message string
 	return err
 }
 
+// ReviewComment represents an inline comment to post via the Set Review API.
+type ReviewComment struct {
+	InReplyTo  string `json:"in_reply_to,omitempty"`
+	Line       int    `json:"line,omitempty"`
+	Message    string `json:"message"`
+	Unresolved *bool  `json:"unresolved,omitempty"`
+}
+
+// PostReviewWithComments posts inline comments via the Set Review endpoint.
+func (c *RESTClient) PostReviewWithComments(changeID, revision string, comments map[string][]ReviewComment) error {
+	path := fmt.Sprintf("changes/%s/revisions/%s/review", changeID, revision)
+	data := map[string]interface{}{
+		"comments": comments,
+	}
+
+	_, err := c.Post(path, data)
+	return err
+}
+
 // AddReviewer adds a reviewer or CC to a change
 // state should be "REVIEWER" or "CC"
 func (c *RESTClient) AddReviewer(changeID string, reviewer string, state string) error {
