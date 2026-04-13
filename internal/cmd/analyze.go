@@ -54,7 +54,6 @@ Examples:
 }
 
 func init() {
-	// Calculate default dates
 	now := time.Now()
 	startOfYear := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
 
@@ -69,12 +68,12 @@ func init() {
 }
 
 type AnalysisData struct {
-	StartDate    string                   `json:"start_date"`
-	EndDate      string                   `json:"end_date"`
-	Repository   string                   `json:"repository,omitempty"`
-	GeneratedAt  string                   `json:"generated_at"`
-	TotalChanges int                      `json:"total_changes"`
-	Changes      []map[string]interface{} `json:"changes"`
+	StartDate    string         `json:"start_date"`
+	EndDate      string         `json:"end_date"`
+	Repository   string         `json:"repository,omitempty"`
+	GeneratedAt  string         `json:"generated_at"`
+	TotalChanges int            `json:"total_changes"`
+	Changes      []gerrit.Change `json:"changes"`
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) {
@@ -87,7 +86,6 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	// Validate date format
 	if _, err := time.Parse("2006-01-02", analyzeStartDate); err != nil {
 		utils.ExitWithError(fmt.Errorf("invalid start date format (use YYYY-MM-DD): %w", err))
 	}
@@ -102,8 +100,6 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 		utils.Info("Analyzing all repositories")
 	}
 
-	// Fetch all changes with pagination
-	// Use configurable timeout for analyze operations which can be slow
 	timeout := time.Duration(analyzeTimeout) * time.Second
 	utils.Debugf("Using timeout: %v", timeout)
 	client := gerrit.NewRESTClientWithTimeout(cfg, timeout)
@@ -119,7 +115,6 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("%s Fetched %d total changes\n", color.GreenString("✓"), len(changes))
 
-	// Create analysis data
 	analysisData := AnalysisData{
 		StartDate:    analyzeStartDate,
 		EndDate:      analyzeEndDate,
@@ -129,7 +124,6 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 		Changes:      changes,
 	}
 
-	// Generate output in requested format
 	var output string
 	switch strings.ToLower(analyzeFormat) {
 	case "markdown", "md":
@@ -142,7 +136,6 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("unknown format: %s (supported: markdown, json, csv)", analyzeFormat))
 	}
 
-	// Write output
 	if analyzeOutput != "" {
 		if err := utils.WriteFile(analyzeOutput, []byte(output)); err != nil {
 			utils.ExitWithError(fmt.Errorf("failed to write output file: %w", err))
@@ -153,8 +146,7 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 	}
 }
 
-func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]map[string]interface{}, error) {
-	// Build query
+func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]gerrit.Change, error) {
 	var queryParts []string
 	queryParts = append(queryParts, "status:merged")
 	queryParts = append(queryParts, fmt.Sprintf("after:%s", analyzeStartDate))
@@ -167,18 +159,16 @@ func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]map[string]inte
 	query := strings.Join(queryParts, " ")
 	utils.Debugf("Query: %s", query)
 
-	var allChanges []map[string]interface{}
+	var allChanges []gerrit.Change
 	start := 0
 
 	for start < analyzeMaxLimit {
-		// Build query path with pagination
 		encodedQuery := url.QueryEscape(query)
 		path := fmt.Sprintf("changes/?q=%s&n=%d&start=%d&o=DETAILED_ACCOUNTS&o=DETAILED_LABELS&o=MESSAGES",
 			encodedQuery, analyzePageSize, start)
 
 		utils.Debugf("Fetching page at offset %d (total so far: %d)", start, len(allChanges))
 
-		// Show progress to user
 		if start > 0 {
 			fmt.Printf("\rFetching changes... %d so far", len(allChanges))
 		} else {
@@ -187,13 +177,13 @@ func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]map[string]inte
 
 		resp, err := client.Get(path)
 		if err != nil {
-			fmt.Println() // Clear progress line
+			fmt.Println()
 			return nil, err
 		}
 
-		var pageChanges []map[string]interface{}
+		var pageChanges []gerrit.Change
 		if err := json.Unmarshal(resp, &pageChanges); err != nil {
-			fmt.Println() // Clear progress line
+			fmt.Println()
 			return nil, fmt.Errorf("failed to parse changes: %w", err)
 		}
 
@@ -205,25 +195,20 @@ func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]map[string]inte
 		utils.Debugf("Fetched %d changes in this page", len(pageChanges))
 		allChanges = append(allChanges, pageChanges...)
 
-		// Check if we got a full page
 		if len(pageChanges) < analyzePageSize {
 			utils.Debugf("Received partial page (%d < %d), no more results", len(pageChanges), analyzePageSize)
 			break
 		}
 
-		// Check for _more_changes indicator on the last change
-		if len(pageChanges) > 0 {
-			lastChange := pageChanges[len(pageChanges)-1]
-			if moreChanges, ok := lastChange["_more_changes"].(bool); !ok || !moreChanges {
-				utils.Debugf("No _more_changes indicator, pagination complete")
-				break
-			}
+		lastChange := pageChanges[len(pageChanges)-1]
+		if !lastChange.MoreChanges {
+			utils.Debugf("No _more_changes indicator, pagination complete")
+			break
 		}
 
 		start += len(pageChanges)
 	}
 
-	// Clear progress line
 	if len(allChanges) > 0 {
 		fmt.Printf("\rFetching changes... %d total\n", len(allChanges))
 	}
@@ -234,7 +219,6 @@ func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]map[string]inte
 func generateMarkdownReport(data AnalysisData) string {
 	var sb strings.Builder
 
-	// Header
 	sb.WriteString("# Gerrit Change Analysis\n\n")
 	sb.WriteString(fmt.Sprintf("**Analysis Period:** %s to %s\n", data.StartDate, data.EndDate))
 	if data.Repository != "" {
@@ -245,7 +229,6 @@ func generateMarkdownReport(data AnalysisData) string {
 	sb.WriteString(fmt.Sprintf("**Generated:** %s\n", time.Now().Format("2006-01-02 15:04:05")))
 	sb.WriteString(fmt.Sprintf("**Total Changes:** %d\n\n", data.TotalChanges))
 
-	// Changes by Repository
 	if data.Repository == "" {
 		sb.WriteString("## Changes by Repository\n\n")
 		repoStats := analyzeByRepository(data.Changes)
@@ -257,7 +240,6 @@ func generateMarkdownReport(data AnalysisData) string {
 		sb.WriteString("\n")
 	}
 
-	// Changes by Author
 	sb.WriteString("## Changes by Author\n\n")
 	authorStats := analyzeByAuthor(data.Changes)
 	sb.WriteString("| Author | Change Count | Repositories |\n")
@@ -267,7 +249,6 @@ func generateMarkdownReport(data AnalysisData) string {
 	}
 	sb.WriteString("\n")
 
-	// Timeline Analysis
 	sb.WriteString("## Timeline Analysis\n\n")
 	sb.WriteString("Changes merged per month:\n\n")
 	timelineStats := analyzeTimeline(data.Changes)
@@ -278,7 +259,6 @@ func generateMarkdownReport(data AnalysisData) string {
 	}
 	sb.WriteString("\n")
 
-	// Top Contributors
 	sb.WriteString("## Top 20 Contributors\n\n")
 	sb.WriteString("| Rank | Author | Changes | Repositories |\n")
 	sb.WriteString("|------|--------|---------|-------------|\n")
@@ -325,36 +305,19 @@ func generateCSVReport(data AnalysisData) string {
 	var sb strings.Builder
 	w := csv.NewWriter(&sb)
 
-	// CSV Header
 	w.Write([]string{"change_number", "project", "subject", "owner_name", "owner_email", "status", "created", "updated", "submitted"})
 
-	// CSV Rows
 	for _, change := range data.Changes {
-		changeNum := getStringValue(change, "_number")
-		if changeNum == "" {
-			changeNum = getStringValue(change, "number")
-		}
-
-		ownerName := ""
-		ownerEmail := ""
-		if owner, ok := change["owner"].(map[string]interface{}); ok {
-			ownerName = getStringValue(owner, "name")
-			if ownerName == "" {
-				ownerName = getStringValue(owner, "username")
-			}
-			ownerEmail = getStringValue(owner, "email")
-		}
-
 		w.Write([]string{
-			changeNum,
-			getStringValue(change, "project"),
-			getStringValue(change, "subject"),
-			ownerName,
-			ownerEmail,
-			getStringValue(change, "status"),
-			getStringValue(change, "created"),
-			getStringValue(change, "updated"),
-			getStringValue(change, "submitted"),
+			change.ChangeNumberStr(),
+			change.Project,
+			change.Subject,
+			change.Owner.DisplayName(),
+			change.Owner.Email,
+			change.Status,
+			change.Created,
+			change.Updated,
+			change.Submitted,
 		})
 	}
 
@@ -363,18 +326,17 @@ func generateCSVReport(data AnalysisData) string {
 }
 
 type Statistic struct {
-	Name      string
-	Count     int
-	RepoCount int
+	Name      string `json:"name"`
+	Count     int    `json:"count"`
+	RepoCount int    `json:"repo_count,omitempty"`
 }
 
-func analyzeByRepository(changes []map[string]interface{}) []Statistic {
+func analyzeByRepository(changes []gerrit.Change) []Statistic {
 	repoCounts := make(map[string]int)
 
 	for _, change := range changes {
-		repo := getStringValue(change, "project")
-		if repo != "" {
-			repoCounts[repo]++
+		if change.Project != "" {
+			repoCounts[change.Project]++
 		}
 	}
 
@@ -383,7 +345,6 @@ func analyzeByRepository(changes []map[string]interface{}) []Statistic {
 		stats = append(stats, Statistic{Name: repo, Count: count})
 	}
 
-	// Sort by count descending
 	sort.Slice(stats, func(i, j int) bool {
 		return stats[i].Count > stats[j].Count
 	})
@@ -391,42 +352,31 @@ func analyzeByRepository(changes []map[string]interface{}) []Statistic {
 	return stats
 }
 
-func analyzeByAuthor(changes []map[string]interface{}) []Statistic {
+func analyzeByAuthor(changes []gerrit.Change) []Statistic {
 	authorCounts := make(map[string]int)
 	authorRepos := make(map[string]map[string]bool)
 
 	for _, change := range changes {
-		author := ""
-		if owner, ok := change["owner"].(map[string]interface{}); ok {
-			author = getStringValue(owner, "name")
-			if author == "" {
-				author = getStringValue(owner, "username")
-			}
-			if author == "" {
-				author = getStringValue(owner, "email")
-			}
+		author := change.Owner.DisplayName()
+		if author == "unknown" {
+			continue
 		}
 
-		if author != "" {
-			authorCounts[author]++
+		authorCounts[author]++
 
-			repo := getStringValue(change, "project")
-			if repo != "" {
-				if authorRepos[author] == nil {
-					authorRepos[author] = make(map[string]bool)
-				}
-				authorRepos[author][repo] = true
+		if change.Project != "" {
+			if authorRepos[author] == nil {
+				authorRepos[author] = make(map[string]bool)
 			}
+			authorRepos[author][change.Project] = true
 		}
 	}
 
 	var stats []Statistic
 	for author, count := range authorCounts {
-		repoCount := len(authorRepos[author])
-		stats = append(stats, Statistic{Name: author, Count: count, RepoCount: repoCount})
+		stats = append(stats, Statistic{Name: author, Count: count, RepoCount: len(authorRepos[author])})
 	}
 
-	// Sort by count descending
 	sort.Slice(stats, func(i, j int) bool {
 		return stats[i].Count > stats[j].Count
 	})
@@ -434,23 +384,24 @@ func analyzeByAuthor(changes []map[string]interface{}) []Statistic {
 	return stats
 }
 
-func analyzeTimeline(changes []map[string]interface{}) []Statistic {
+func analyzeTimeline(changes []gerrit.Change) []Statistic {
 	monthCounts := make(map[string]int)
 
 	for _, change := range changes {
-		submitted := getStringValue(change, "submitted")
-		if submitted == "" {
-			submitted = getStringValue(change, "updated")
+		ts := change.Submitted
+		if ts == "" {
+			ts = change.Updated
 		}
 
-		if submitted != "" {
-			// Extract YYYY-MM from the timestamp
-			parts := strings.Split(submitted, "T")
+		if ts != "" {
+			parts := strings.Split(ts, "T")
+			if len(parts) == 0 {
+				parts = strings.Split(ts, " ")
+			}
 			if len(parts) > 0 {
 				dateParts := strings.Split(parts[0], "-")
 				if len(dateParts) >= 2 {
-					month := dateParts[0] + "-" + dateParts[1]
-					monthCounts[month]++
+					monthCounts[dateParts[0]+"-"+dateParts[1]]++
 				}
 			}
 		}
@@ -461,7 +412,6 @@ func analyzeTimeline(changes []map[string]interface{}) []Statistic {
 		stats = append(stats, Statistic{Name: month, Count: count})
 	}
 
-	// Sort by month ascending
 	sort.Slice(stats, func(i, j int) bool {
 		return stats[i].Name < stats[j].Name
 	})

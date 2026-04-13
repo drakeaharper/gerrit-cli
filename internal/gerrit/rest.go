@@ -165,28 +165,28 @@ func (c *RESTClient) TestConnection() error {
 }
 
 // GetChange retrieves a change by ID
-func (c *RESTClient) GetChange(changeID string) (map[string]interface{}, error) {
+func (c *RESTClient) GetChange(changeID string) (*Change, error) {
 	resp, err := c.Get(fmt.Sprintf("changes/%s?o=LABELS&o=CURRENT_REVISION&o=CURRENT_COMMIT&o=DETAILED_ACCOUNTS", changeID))
 	if err != nil {
 		return nil, err
 	}
 
-	var change map[string]interface{}
+	var change Change
 	if err := json.Unmarshal(resp, &change); err != nil {
 		return nil, fmt.Errorf("failed to parse change: %w", err)
 	}
 
-	return change, nil
+	return &change, nil
 }
 
 // GetChangeComments retrieves comments for a change
-func (c *RESTClient) GetChangeComments(changeID string) (map[string]interface{}, error) {
+func (c *RESTClient) GetChangeComments(changeID string) (map[string][]CommentInfo, error) {
 	resp, err := c.Get(fmt.Sprintf("changes/%s/comments", changeID))
 	if err != nil {
 		return nil, err
 	}
 
-	var comments map[string]interface{}
+	var comments map[string][]CommentInfo
 	if err := json.Unmarshal(resp, &comments); err != nil {
 		return nil, fmt.Errorf("failed to parse comments: %w", err)
 	}
@@ -195,14 +195,14 @@ func (c *RESTClient) GetChangeComments(changeID string) (map[string]interface{},
 }
 
 // ListChanges lists changes based on query
-func (c *RESTClient) ListChanges(query string, limit int) ([]map[string]interface{}, error) {
+func (c *RESTClient) ListChanges(query string, limit int) ([]Change, error) {
 	path := fmt.Sprintf("changes/?q=%s&n=%d&o=LABELS&o=CURRENT_REVISION&o=DETAILED_ACCOUNTS", query, limit)
 	resp, err := c.Get(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var changes []map[string]interface{}
+	var changes []Change
 	if err := json.Unmarshal(resp, &changes); err != nil {
 		return nil, fmt.Errorf("failed to parse changes: %w", err)
 	}
@@ -211,14 +211,14 @@ func (c *RESTClient) ListChanges(query string, limit int) ([]map[string]interfac
 }
 
 // GetChangeFiles retrieves the list of files in a change
-func (c *RESTClient) GetChangeFiles(changeID string, revision string) (map[string]interface{}, error) {
+func (c *RESTClient) GetChangeFiles(changeID string, revision string) (map[string]FileInfo, error) {
 	path := fmt.Sprintf("changes/%s/revisions/%s/files", changeID, revision)
 	resp, err := c.Get(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var files map[string]interface{}
+	var files map[string]FileInfo
 	if err := json.Unmarshal(resp, &files); err != nil {
 		return nil, fmt.Errorf("failed to parse files: %w", err)
 	}
@@ -227,14 +227,14 @@ func (c *RESTClient) GetChangeFiles(changeID string, revision string) (map[strin
 }
 
 // GetChangeMessages retrieves all messages for a change
-func (c *RESTClient) GetChangeMessages(changeID string) ([]map[string]interface{}, error) {
+func (c *RESTClient) GetChangeMessages(changeID string) ([]ChangeMessageInfo, error) {
 	path := fmt.Sprintf("changes/%s/messages", changeID)
 	resp, err := c.Get(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var messages []map[string]interface{}
+	var messages []ChangeMessageInfo
 	if err := json.Unmarshal(resp, &messages); err != nil {
 		return nil, fmt.Errorf("failed to parse messages: %w", err)
 	}
@@ -288,7 +288,7 @@ func (c *RESTClient) AddReviewer(changeID string, reviewer string, state string)
 // RebaseChange rebases a change onto a new base
 // base can be empty (rebase onto target branch HEAD), a commit SHA-1, or "change~patchset"
 // allowConflicts allows rebasing even with conflicts (creates conflict markers)
-func (c *RESTClient) RebaseChange(changeID string, base string, allowConflicts bool) (map[string]interface{}, error) {
+func (c *RESTClient) RebaseChange(changeID string, base string, allowConflicts bool) (*Change, error) {
 	path := fmt.Sprintf("changes/%s/rebase", changeID)
 	data := map[string]interface{}{}
 
@@ -304,10 +304,10 @@ func (c *RESTClient) RebaseChange(changeID string, base string, allowConflicts b
 		return nil, err
 	}
 
-	var change map[string]interface{}
+	var change Change
 	if err := json.Unmarshal(resp, &change); err != nil {
 		return nil, fmt.Errorf("failed to parse rebase response: %w", err)
 	}
 
-	return change, nil
+	return &change, nil
 }

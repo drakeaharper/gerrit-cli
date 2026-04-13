@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -45,7 +46,6 @@ func runComments(cmd *cobra.Command, args []string) {
 		return
 	}
 	changeID := args[0]
-	// Validate change ID
 	if err := utils.ValidateChangeID(changeID); err != nil {
 		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
 	}
@@ -78,6 +78,19 @@ func runComments(cmd *cobra.Command, args []string) {
 	displayThreads(threads)
 }
 
+// Comment is the display-layer representation of a comment, normalized across API sources.
+type Comment struct {
+	ID         string
+	PatchSet   int
+	File       string
+	Line       int
+	Author     string
+	Message    string
+	Updated    string
+	Unresolved bool
+	InReplyTo  string
+}
+
 func getCommentsREST(cfg *config.Config, changeID string) ([]Comment, error) {
 	client := gerrit.NewRESTClient(cfg)
 	commentsData, err := client.GetChangeComments(changeID)
@@ -91,84 +104,51 @@ func getCommentsREST(cfg *config.Config, changeID string) ([]Comment, error) {
 func getCommentsSSH(cfg *config.Config, changeID string) ([]Comment, error) {
 	client := gerrit.NewSSHClient(cfg)
 
-	// Get change details with comments
 	output, err := client.GetChangeDetails(changeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the JSON output
+	// Parse the JSON output — SSH returns untyped data for comments
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var changeData map[string]interface{}
 
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
-		if err := utils.ParseJSON([]byte(line), &changeData); err != nil {
+		var changeData map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &changeData); err != nil {
 			utils.Debugf("Failed to parse line: %s", line)
 			continue
 		}
 
-		// Skip the stats line
 		if _, hasType := changeData["type"]; hasType {
 			continue
 		}
 
-		break // Use the first valid change data
+		return parseSSHComments(changeData), nil
 	}
 
-	return parseSSHComments(changeData), nil
+	return nil, nil
 }
 
-type Comment struct {
-	ID         string
-	PatchSet   int
-	File       string
-	Line       int
-	Author     string
-	Message    string
-	Updated    string
-	Unresolved bool
-	InReplyTo  string
-}
-
-func parseRESTComments(commentsData map[string]interface{}) []Comment {
+func parseRESTComments(commentsData map[string][]gerrit.CommentInfo) []Comment {
 	var comments []Comment
 
 	for filename, fileComments := range commentsData {
-		if commentsList, ok := fileComments.([]interface{}); ok {
-			for _, commentData := range commentsList {
-				if comment, ok := commentData.(map[string]interface{}); ok {
-					c := Comment{
-						ID:      getStringValue(comment, "id"),
-						File:    filename,
-						Message: getStringValue(comment, "message"),
-						Updated: getStringValue(comment, "updated"),
-					}
-
-					if patchSet, ok := comment["patch_set"].(float64); ok {
-						c.PatchSet = int(patchSet)
-					}
-
-					if line, ok := comment["line"].(float64); ok {
-						c.Line = int(line)
-					}
-
-					if author, ok := comment["author"].(map[string]interface{}); ok {
-						c.Author = getAuthorName(author)
-					}
-
-					if unresolved, ok := comment["unresolved"].(bool); ok {
-						c.Unresolved = unresolved
-					}
-
-					c.InReplyTo = getStringValue(comment, "in_reply_to")
-
-					comments = append(comments, c)
-				}
-			}
+		for _, ci := range fileComments {
+			comments = append(comments, Comment{
+				ID:         ci.ID,
+				PatchSet:   ci.PatchSet,
+				File:       filename,
+				Line:       ci.Line,
+				Author:     ci.Author.DisplayName(),
+				Message:    ci.Message,
+				Updated:    ci.Updated,
+				Unresolved: ci.Unresolved,
+				InReplyTo:  ci.InReplyTo,
+			})
 		}
 	}
 
@@ -178,14 +158,13 @@ func parseRESTComments(commentsData map[string]interface{}) []Comment {
 func parseSSHComments(changeData map[string]interface{}) []Comment {
 	var comments []Comment
 
-	// SSH API has a different structure - comments are nested in the change data
 	if commentsSection, ok := changeData["comments"].([]interface{}); ok {
 		for _, commentData := range commentsSection {
 			if comment, ok := commentData.(map[string]interface{}); ok {
 				c := Comment{
-					File:    getStringValue(comment, "file"),
-					Message: getStringValue(comment, "message"),
-					Updated: getStringValue(comment, "timestamp"),
+					Message: getSSHStringValue(comment, "message"),
+					Updated: getSSHStringValue(comment, "timestamp"),
+					File:    getSSHStringValue(comment, "file"),
 				}
 
 				if line, ok := comment["line"].(float64); ok {
@@ -204,8 +183,18 @@ func parseSSHComments(changeData map[string]interface{}) []Comment {
 	return comments
 }
 
+// getSSHStringValue reads a string from a raw SSH JSON map.
+func getSSHStringValue(data map[string]interface{}, key string) string {
+	if val, ok := data[key]; ok {
+		if s, ok := val.(string); ok {
+			return s
+		}
+		return fmt.Sprintf("%v", val)
+	}
+	return ""
+}
+
 // getOrderedThreads fetches comments and returns ordered, filtered threads.
-// If includeResolved is false, only unresolved threads are returned.
 func getOrderedThreads(cfg *config.Config, changeID string, includeResolved bool) ([][]Comment, error) {
 	comments, err := getCommentsREST(cfg, changeID)
 	if err != nil {
@@ -234,7 +223,6 @@ func getOrderedThreads(cfg *config.Config, changeID string, includeResolved bool
 		threads = filtered
 	}
 
-	// Sort threads by file then line for stable ordering
 	sort.Slice(threads, func(i, j int) bool {
 		if threads[i][0].File != threads[j][0].File {
 			return threads[i][0].File < threads[j][0].File
@@ -246,7 +234,6 @@ func getOrderedThreads(cfg *config.Config, changeID string, includeResolved bool
 }
 
 func displayThreads(threads [][]Comment) {
-	// Group threads by file, preserving thread indices
 	type indexedThread struct {
 		index  int
 		thread []Comment
@@ -278,7 +265,6 @@ func displayThreads(threads [][]Comment) {
 			thread := it.thread
 			firstComment := thread[0]
 
-			// Thread header with index
 			status := utils.BoldRed("[UNRESOLVED]")
 			if !firstComment.Unresolved {
 				status = utils.Green("[RESOLVED]")
@@ -296,7 +282,6 @@ func displayThreads(threads [][]Comment) {
 				}
 				fmt.Println()
 
-				// Format message with proper indentation
 				messageLines := strings.Split(strings.TrimSpace(comment.Message), "\n")
 				for _, line := range messageLines {
 					fmt.Printf("    %s\n", line)
@@ -306,7 +291,6 @@ func displayThreads(threads [][]Comment) {
 		}
 	}
 
-	// Summary
 	totalThreads := len(threads)
 	unresolvedCount := 0
 	for _, thread := range threads {
@@ -328,34 +312,16 @@ func displayThreads(threads [][]Comment) {
 	}
 }
 
-func getAuthorName(author map[string]interface{}) string {
-	if name, ok := author["name"].(string); ok && name != "" {
-		return name
-	}
-	if username, ok := author["username"].(string); ok && username != "" {
-		return username
-	}
-	if email, ok := author["email"].(string); ok && email != "" {
-		return email
-	}
-	return "unknown"
-}
-
-// buildCommentThreads groups comments into threads based on file and line number
 func buildCommentThreads(comments []Comment) [][]Comment {
-	// Group comments by file and line number
 	threadMap := make(map[string][]Comment)
 
 	for _, comment := range comments {
-		// Comments on the same file and line are part of the same thread
 		threadKey := fmt.Sprintf("%s:%d", comment.File, comment.Line)
 		threadMap[threadKey] = append(threadMap[threadKey], comment)
 	}
 
-	// Convert map to slice of threads and sort each thread by timestamp
 	threads := [][]Comment{}
 	for _, thread := range threadMap {
-		// Sort thread by timestamp (oldest first)
 		sort.Slice(thread, func(i, j int) bool {
 			return thread[i].Updated < thread[j].Updated
 		})
@@ -365,22 +331,15 @@ func buildCommentThreads(comments []Comment) [][]Comment {
 	return threads
 }
 
-// markThreadResolution marks the resolution status of each thread based on its last comment
 func markThreadResolution(threads [][]Comment) [][]Comment {
 	for _, thread := range threads {
 		if len(thread) == 0 {
 			continue
 		}
 
-		// Thread is already sorted by timestamp, so last comment is most recent
 		lastComment := thread[len(thread)-1]
-
-		// A thread is considered resolved if:
-		// 1. The last comment is explicitly marked as resolved (!Unresolved)
-		// 2. The last comment's message is "Done" (case-insensitive)
 		isResolved := !lastComment.Unresolved || strings.EqualFold(strings.TrimSpace(lastComment.Message), "Done")
 
-		// Mark all comments in the thread with the thread's resolution status
 		for i := range thread {
 			thread[i].Unresolved = !isResolved
 		}

@@ -79,13 +79,13 @@ func runList(cmd *cobra.Command, args []string) {
 	}
 }
 
-func listChangesREST(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
+func listChangesREST(cfg *config.Config, query string, limit int) ([]gerrit.Change, error) {
 	client := gerrit.NewRESTClient(cfg)
 	encodedQuery := url.QueryEscape(query)
 	return client.ListChanges(encodedQuery, limit)
 }
 
-func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
+func listChangesSSH(cfg *config.Config, query string, limit int) ([]gerrit.Change, error) {
 	client := gerrit.NewSSHClient(cfg)
 
 	output, err := client.ExecuteCommandArgs("query", "--format=JSON", "--current-patch-set", fmt.Sprintf("limit:%d", limit), query)
@@ -96,41 +96,21 @@ func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]i
 	return parseSSHChanges(output), nil
 }
 
-func displaySimpleChanges(changes []map[string]interface{}) {
+func displaySimpleChanges(changes []gerrit.Change) {
 	headers := []string{"Change", "Subject", "CR", "QR", "LR", "Verified", "Updated"}
 	var rows [][]string
 
 	for _, change := range changes {
-		changeNum := getStringValue(change, "_number")
-		if changeNum == "" {
-			changeNum = getStringValue(change, "number")
-		}
-
-		subject := getStringValue(change, "subject")
-		subject = utils.TruncateString(subject, 60)
-
-		updated := getStringValue(change, "updated")
-		if updated == "" {
-			updated = getStringValue(change, "lastUpdated")
-		}
-		updated = utils.FormatTimeAgo(updated)
-
-		codeReview := getLabelStatus(change, "Code-Review")
-		qr := getLabelStatus(change, "QA-Review")
-		lr := getLabelStatus(change, "Lint-Review")
-		verified := getLabelStatus(change, "Verified")
-
 		rows = append(rows, []string{
-			utils.BoldCyan(changeNum),
-			subject,
-			codeReview,
-			qr,
-			lr,
-			verified,
-			updated,
+			utils.BoldCyan(change.ChangeNumberStr()),
+			utils.TruncateString(change.Subject, 60),
+			getLabelStatus(change, "Code-Review"),
+			getLabelStatus(change, "QA-Review"),
+			getLabelStatus(change, "Lint-Review"),
+			getLabelStatus(change, "Verified"),
+			utils.FormatTimeAgo(change.UpdatedTime()),
 		})
 	}
 
 	fmt.Print(utils.FormatTable(headers, rows, 2))
 }
-

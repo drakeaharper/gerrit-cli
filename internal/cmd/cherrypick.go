@@ -75,8 +75,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("failed to get change details: %w", err))
 	}
 
-	// Get change subject for better output
-	subject := getStringValue(change, "subject")
+	subject := change.Subject
 
 	// Determine patchset number
 	patchsetNum := patchset

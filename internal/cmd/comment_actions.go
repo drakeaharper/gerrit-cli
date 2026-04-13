@@ -104,11 +104,10 @@ func getCurrentRevision(client *gerrit.RESTClient, changeID string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to get change details: %w", err)
 	}
-	rev := getStringValue(change, "current_revision")
-	if rev == "" {
+	if change.CurrentRevision == "" {
 		return "", fmt.Errorf("could not determine current revision for change %s", changeID)
 	}
-	return rev, nil
+	return change.CurrentRevision, nil
 }
 
 func loadConfigAndClient() (*config.Config, *gerrit.RESTClient) {

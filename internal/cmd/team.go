@@ -43,9 +43,6 @@ func runTeam(cmd *cobra.Command, args []string) {
 		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	// Build query to find changes where user is reviewer or CC'd
-	// Using the same query patterns as Gerrit web UI, but exclude merged by default
-	// By default, only show Verified+1 changes unless --all-verified is specified
 	verifiedFilter := ""
 	if !teamAllVerified {
 		verifiedFilter = " label:Verified=1"
@@ -53,27 +50,20 @@ func runTeam(cmd *cobra.Command, args []string) {
 
 	var query string
 	if teamStatus == "open" {
-		// CC query: is:open -is:ignored -is:wip cc:self
-		// Reviewer query: is:open -owner:self -is:wip -is:ignored reviewer:self
-		// Both exclude merged changes
 		query = fmt.Sprintf("(is:open -is:ignored -is:wip -status:merged%s cc:%s OR is:open -owner:%s -is:wip -is:ignored -status:merged%s reviewer:%s)",
 			verifiedFilter, cfg.User, cfg.User, verifiedFilter, cfg.User)
 	} else if teamStatus == "merged" {
-		// Allow merged changes if explicitly requested
 		query = fmt.Sprintf("(status:merged%s cc:%s OR status:merged%s reviewer:%s)", verifiedFilter, cfg.User, verifiedFilter, cfg.User)
 	} else {
-		// For abandoned or other statuses, exclude merged
 		query = fmt.Sprintf("(status:%s -status:merged%s cc:%s OR status:%s -status:merged%s reviewer:%s)", teamStatus, verifiedFilter, cfg.User, teamStatus, verifiedFilter, cfg.User)
 	}
 
-	// Append custom filter if provided
 	if teamFilter != "" {
 		query = fmt.Sprintf("(%s) %s", query, teamFilter)
 	}
 
 	utils.Debugf("Query: %s", query)
 
-	// Try REST API first, fall back to SSH if needed
 	changes, err := listTeamChangesREST(cfg, query, teamLimit)
 	if err != nil {
 		utils.Warnf("REST API failed: %v", err)
@@ -89,7 +79,6 @@ func runTeam(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Display results
 	if teamDetailed {
 		displayDetailedChanges(changes)
 	} else {
@@ -97,13 +86,13 @@ func runTeam(cmd *cobra.Command, args []string) {
 	}
 }
 
-func listTeamChangesREST(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
+func listTeamChangesREST(cfg *config.Config, query string, limit int) ([]gerrit.Change, error) {
 	client := gerrit.NewRESTClient(cfg)
 	encodedQuery := url.QueryEscape(query)
 	return client.ListChanges(encodedQuery, limit)
 }
 
-func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
+func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]gerrit.Change, error) {
 	client := gerrit.NewSSHClient(cfg)
 
 	output, err := client.ExecuteCommandArgs("query", "--format=JSON", "--current-patch-set", fmt.Sprintf("limit:%d", limit), query)
@@ -114,41 +103,20 @@ func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]map[stri
 	return parseSSHChanges(output), nil
 }
 
-func displayTeamSimpleChanges(changes []map[string]interface{}) {
+func displayTeamSimpleChanges(changes []gerrit.Change) {
 	headers := []string{"Change", "Subject", "Owner", "CR", "QR", "LR", "Verified", "Updated"}
 	var rows [][]string
 
 	for _, change := range changes {
-		changeNum := getStringValue(change, "_number")
-		if changeNum == "" {
-			changeNum = getStringValue(change, "number")
-		}
-
-		subject := getStringValue(change, "subject")
-		subject = utils.TruncateString(subject, 45)
-
-		owner := getOwnerName(change)
-
-		updated := getStringValue(change, "updated")
-		if updated == "" {
-			updated = getStringValue(change, "lastUpdated")
-		}
-		updated = utils.FormatTimeAgo(updated)
-
-		codeReview := getLabelStatus(change, "Code-Review")
-		qr := getLabelStatus(change, "QA-Review")
-		lr := getLabelStatus(change, "Lint-Review")
-		verified := getLabelStatus(change, "Verified")
-
 		rows = append(rows, []string{
-			utils.BoldCyan(changeNum),
-			subject,
-			owner,
-			codeReview,
-			qr,
-			lr,
-			verified,
-			updated,
+			utils.BoldCyan(change.ChangeNumberStr()),
+			utils.TruncateString(change.Subject, 45),
+			change.Owner.DisplayName(),
+			getLabelStatus(change, "Code-Review"),
+			getLabelStatus(change, "QA-Review"),
+			getLabelStatus(change, "Lint-Review"),
+			getLabelStatus(change, "Verified"),
+			utils.FormatTimeAgo(change.UpdatedTime()),
 		})
 	}
 

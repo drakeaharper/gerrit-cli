@@ -69,11 +69,8 @@ func runRebase(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("%s Change rebased successfully!\n", color.GreenString("✓"))
 
-	// Display some info about the rebased change
-	if subject, ok := change["subject"].(string); ok {
-		fmt.Printf("Subject: %s\n", subject)
-	}
-	if revisions, ok := change["revisions"].(map[string]interface{}); ok {
-		fmt.Printf("New patchset count: %d\n", len(revisions))
+	fmt.Printf("Subject: %s\n", change.Subject)
+	if len(change.Revisions) > 0 {
+		fmt.Printf("New patchset count: %d\n", len(change.Revisions))
 	}
 }

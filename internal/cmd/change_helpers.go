@@ -1,52 +1,20 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
+	"github.com/drakeaharper/gerrit-cli/internal/gerrit"
 	"github.com/drakeaharper/gerrit-cli/internal/utils"
 )
 
-// getStringValue extracts a string from a map, handling float64/int JSON number types.
-func getStringValue(data map[string]interface{}, key string) string {
-	if val, ok := data[key]; ok {
-		switch v := val.(type) {
-		case string:
-			return v
-		case float64:
-			return strconv.FormatFloat(v, 'f', 0, 64)
-		case int:
-			return strconv.Itoa(v)
-		default:
-			return fmt.Sprintf("%v", v)
-		}
-	}
-	return ""
-}
-
-// getOwnerName extracts the display name from a change's owner field.
-func getOwnerName(change map[string]interface{}) string {
-	if owner, ok := change["owner"].(map[string]interface{}); ok {
-		if name, ok := owner["name"].(string); ok && name != "" {
-			return name
-		}
-		if username, ok := owner["username"].(string); ok && username != "" {
-			return username
-		}
-		if email, ok := owner["email"].(string); ok && email != "" {
-			return email
-		}
-	}
-	return "unknown"
-}
-
 // getLabelStatus extracts the vote status for any label from a Gerrit change.
 // Checks REST format (labels map) first, then SSH format (currentPatchSet.approvals).
-func getLabelStatus(change map[string]interface{}, labelName string) string {
-	// REST API format: change["labels"][labelName]
-	if labels, ok := change["labels"].(map[string]interface{}); ok {
-		if labelData, exists := labels[labelName].(map[string]interface{}); exists {
+func getLabelStatus(change gerrit.Change, labelName string) string {
+	// REST API format: labels[labelName] is a LabelInfo-like object
+	if change.Labels != nil {
+		if labelData, exists := change.Labels[labelName].(map[string]interface{}); exists {
 			// Check approved map (highest positive vote)
 			if approved, hasApproved := labelData["approved"].(map[string]interface{}); hasApproved {
 				if value, ok := approved["value"]; ok {
@@ -89,16 +57,10 @@ func getLabelStatus(change map[string]interface{}, labelName string) string {
 	}
 
 	// SSH API format: currentPatchSet.approvals
-	if currentPatchSet, ok := change["currentPatchSet"].(map[string]interface{}); ok {
-		if approvals, ok := currentPatchSet["approvals"].([]interface{}); ok {
-			for _, approval := range approvals {
-				if approvalMap, ok := approval.(map[string]interface{}); ok {
-					if approvalType, ok := approvalMap["type"].(string); ok && approvalType == labelName {
-						if value, ok := approvalMap["value"]; ok {
-							return utils.FormatScore(labelName, value)
-						}
-					}
-				}
+	if change.CurrentPatchSet != nil {
+		for _, approval := range change.CurrentPatchSet.Approvals {
+			if approval.Type == labelName {
+				return utils.FormatScore(labelName, approval.Value)
 			}
 		}
 	}
@@ -107,24 +69,44 @@ func getLabelStatus(change map[string]interface{}, labelName string) string {
 	return utils.Gray("—")
 }
 
+// getAuthorName extracts a display name from an untyped account map.
+// Used for label internals where the structure varies across Gerrit versions.
+func getAuthorName(author map[string]interface{}) string {
+	if name, ok := author["name"].(string); ok && name != "" {
+		return name
+	}
+	if username, ok := author["username"].(string); ok && username != "" {
+		return username
+	}
+	if email, ok := author["email"].(string); ok && email != "" {
+		return email
+	}
+	return "unknown"
+}
+
 // parseSSHChanges parses Gerrit SSH query JSON-lines output into a slice of changes.
-func parseSSHChanges(output string) []map[string]interface{} {
+func parseSSHChanges(output string) []gerrit.Change {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var changes []map[string]interface{}
+	var changes []gerrit.Change
 
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
-		var change map[string]interface{}
-		if err := utils.ParseJSON([]byte(line), &change); err != nil {
+		// Peek to skip the stats line
+		var raw map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
 			utils.Debugf("Failed to parse line: %s", line)
 			continue
 		}
+		if _, hasType := raw["type"]; hasType {
+			continue
+		}
 
-		// Skip the stats line
-		if _, hasType := change["type"]; hasType {
+		var change gerrit.Change
+		if err := json.Unmarshal([]byte(line), &change); err != nil {
+			utils.Debugf("Failed to parse change: %s", line)
 			continue
 		}
 
@@ -134,42 +116,55 @@ func parseSSHChanges(output string) []map[string]interface{} {
 	return changes
 }
 
+// parseSSHChangeDetail parses a single change from SSH JSON-lines output.
+func parseSSHChangeDetail(output string) (*gerrit.Change, error) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		var raw map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			utils.Debugf("Failed to parse line: %s", line)
+			continue
+		}
+		if _, hasType := raw["type"]; hasType {
+			continue
+		}
+
+		var change gerrit.Change
+		if err := json.Unmarshal([]byte(line), &change); err != nil {
+			continue
+		}
+
+		return &change, nil
+	}
+
+	return nil, fmt.Errorf("no valid change data found")
+}
+
 // displayDetailedChanges renders a detailed multi-line view of changes.
-func displayDetailedChanges(changes []map[string]interface{}) {
+func displayDetailedChanges(changes []gerrit.Change) {
 	for i, change := range changes {
 		if i > 0 {
 			fmt.Println()
 		}
 
-		changeNum := getStringValue(change, "_number")
-		if changeNum == "" {
-			changeNum = getStringValue(change, "number")
-		}
-
-		subject := getStringValue(change, "subject")
-		status := getStringValue(change, "status")
-		updated := getStringValue(change, "updated")
-		if updated == "" {
-			updated = getStringValue(change, "lastUpdated")
-		}
-
-		project := getStringValue(change, "project")
-		branch := getStringValue(change, "branch")
-		owner := getOwnerName(change)
-
-		fmt.Printf("%s %s\n", utils.BoldCyan("Change:"), utils.BoldWhite(changeNum))
-		fmt.Printf("%s %s\n", utils.BoldCyan("Subject:"), subject)
-		fmt.Printf("%s %s\n", utils.BoldCyan("Status:"), utils.FormatChangeStatus(status))
-		fmt.Printf("%s %s\n", utils.BoldCyan("Project:"), project)
-		fmt.Printf("%s %s\n", utils.BoldCyan("Branch:"), branch)
-		fmt.Printf("%s %s\n", utils.BoldCyan("Owner:"), owner)
-		fmt.Printf("%s %s\n", utils.BoldCyan("Updated:"), utils.FormatTimeAgo(updated))
+		fmt.Printf("%s %s\n", utils.BoldCyan("Change:"), utils.BoldWhite(change.ChangeNumberStr()))
+		fmt.Printf("%s %s\n", utils.BoldCyan("Subject:"), change.Subject)
+		fmt.Printf("%s %s\n", utils.BoldCyan("Status:"), utils.FormatChangeStatus(change.Status))
+		fmt.Printf("%s %s\n", utils.BoldCyan("Project:"), change.Project)
+		fmt.Printf("%s %s\n", utils.BoldCyan("Branch:"), change.Branch)
+		fmt.Printf("%s %s\n", utils.BoldCyan("Owner:"), change.Owner.DisplayName())
+		fmt.Printf("%s %s\n", utils.BoldCyan("Updated:"), utils.FormatTimeAgo(change.UpdatedTime()))
 
 		// Show review scores if available
-		if labels, ok := change["labels"].(map[string]interface{}); ok {
+		if len(change.Labels) > 0 {
 			fmt.Printf("%s ", utils.BoldCyan("Reviews:"))
 			var scores []string
-			for label, data := range labels {
+			for label, data := range change.Labels {
 				if labelData, ok := data.(map[string]interface{}); ok {
 					if approved, ok := labelData["approved"].(map[string]interface{}); ok {
 						if value, ok := approved["value"]; ok {

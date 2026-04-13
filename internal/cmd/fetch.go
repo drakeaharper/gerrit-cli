@@ -126,61 +126,26 @@ func runFetch(cmd *cobra.Command, args []string) {
 	}
 }
 
-func getChangeForFetch(cfg *config.Config, changeID string) (map[string]interface{}, error) {
-	// Try REST API first, fall back to SSH
+func getChangeForFetch(cfg *config.Config, changeID string) (*gerrit.Change, error) {
 	client := gerrit.NewRESTClient(cfg)
 	change, err := client.GetChange(changeID)
 	if err != nil {
 		utils.Debugf("REST API failed: %v", err)
-		// Fall back to SSH
 		sshClient := gerrit.NewSSHClient(cfg)
 		output, err := sshClient.ExecuteCommandArgs("query", "--format=JSON", "--current-patch-set", changeID)
 		if err != nil {
 			return nil, err
 		}
-
-		lines := strings.Split(strings.TrimSpace(output), "\n")
-		for _, line := range lines {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-
-			var changeData map[string]interface{}
-			if err := utils.ParseJSON([]byte(line), &changeData); err != nil {
-				continue
-			}
-
-			// Skip the stats line
-			if _, hasType := changeData["type"]; hasType {
-				continue
-			}
-
-			return changeData, nil
-		}
-		return nil, fmt.Errorf("no valid change data found")
+		return parseSSHChangeDetail(output)
 	}
-
 	return change, nil
 }
 
-func getCurrentPatchsetNumber(change map[string]interface{}) string {
-	// Try REST API format first
-	if revisions, ok := change["revisions"].(map[string]interface{}); ok {
-		currentRevision := getStringValue(change, "current_revision")
-		if currentRevision != "" {
-			if rev, ok := revisions[currentRevision].(map[string]interface{}); ok {
-				return getStringValue(rev, "_number")
-			}
-		}
+func getCurrentPatchsetNumber(change *gerrit.Change) string {
+	if psNum := change.CurrentPatchSetNumber(); psNum > 0 {
+		return fmt.Sprintf("%d", psNum)
 	}
-
-	// Try SSH API format
-	if currentPatchSet, ok := change["currentPatchSet"].(map[string]interface{}); ok {
-		return getStringValue(currentPatchSet, "number")
-	}
-
-	// Try direct number field
-	return getStringValue(change, "number")
+	return ""
 }
 
 func getChangePrefix(changeID string) string {
