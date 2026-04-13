@@ -21,18 +21,6 @@ func NewSSHClient(cfg *config.Config) *SSHClient {
 	}
 }
 
-// ExecuteCommand executes a Gerrit command with proper argument handling
-// Deprecated: Use ExecuteCommandArgs for better security
-func (c *SSHClient) ExecuteCommand(command string) (string, error) {
-	// Parse the command to extract individual arguments
-	// This is kept for backward compatibility but should be avoided
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return "", fmt.Errorf("empty command")
-	}
-	return c.ExecuteCommandArgs(parts...)
-}
-
 // ExecuteCommandArgs executes a Gerrit command with properly separated arguments
 func (c *SSHClient) ExecuteCommandArgs(args ...string) (string, error) {
 	sshArgs := []string{
@@ -58,7 +46,7 @@ func (c *SSHClient) ExecuteCommandArgs(args ...string) (string, error) {
 }
 
 func (c *SSHClient) TestConnection() error {
-	output, err := c.ExecuteCommand("version")
+	output, err := c.ExecuteCommandArgs("version")
 	if err != nil {
 		return fmt.Errorf("failed to connect to Gerrit: %w", err)
 	}
@@ -68,16 +56,6 @@ func (c *SSHClient) TestConnection() error {
 	}
 
 	return nil
-}
-
-// StreamCommand streams output from a Gerrit command
-// Deprecated: Use StreamCommandArgs for better security
-func (c *SSHClient) StreamCommand(command string, output io.Writer) error {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return fmt.Errorf("empty command")
-	}
-	return c.StreamCommandArgs(output, parts...)
 }
 
 // StreamCommandArgs streams output from a Gerrit command with properly separated arguments

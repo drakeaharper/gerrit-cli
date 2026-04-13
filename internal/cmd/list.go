@@ -90,9 +90,7 @@ func listChangesREST(cfg *config.Config, query string, limit int) ([]map[string]
 func listChangesSSH(cfg *config.Config, query string, limit int) ([]map[string]interface{}, error) {
 	client := gerrit.NewSSHClient(cfg)
 
-	// Build SSH query command
-	sshQuery := fmt.Sprintf("query --format=JSON --current-patch-set limit:%d %s", limit, query)
-	output, err := client.ExecuteCommand(sshQuery)
+	output, err := client.ExecuteCommandArgs("query", "--format=JSON", "--current-patch-set", fmt.Sprintf("limit:%d", limit), query)
 	if err != nil {
 		return nil, err
 	}

@@ -134,7 +134,7 @@ func getChangeForFetch(cfg *config.Config, changeID string) (map[string]interfac
 		utils.Debugf("REST API failed: %v", err)
 		// Fall back to SSH
 		sshClient := gerrit.NewSSHClient(cfg)
-		output, err := sshClient.ExecuteCommand(fmt.Sprintf("query --format=JSON --current-patch-set %s", changeID))
+		output, err := sshClient.ExecuteCommandArgs("query", "--format=JSON", "--current-patch-set", changeID)
 		if err != nil {
 			return nil, err
 		}
