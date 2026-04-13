@@ -31,15 +31,8 @@ func NewRESTClientWithTimeout(cfg *config.Config, timeout time.Duration) *RESTCl
 	}
 }
 
-func (c *RESTClient) getBaseURL() string {
-	// Use the config's method to build the URL properly
-	// Remove the /a/ part as we'll add it in doRequest
-	url := c.config.GetRESTURL("")
-	return strings.TrimSuffix(url, "/a/")
-}
-
 func (c *RESTClient) doRequest(method, path string, body io.Reader) (*http.Response, error) {
-	url := fmt.Sprintf("%s/a/%s", c.getBaseURL(), strings.TrimPrefix(path, "/"))
+	url := c.config.GetRESTURL(strings.TrimPrefix(path, "/"))
 
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
