@@ -76,14 +76,14 @@ func FormatTimeAgo(timestamp interface{}) string {
 
 	switch v := timestamp.(type) {
 	case string:
-		// Try different time formats
+		// Try different time formats — Gerrit timestamps are UTC
 		formats := []string{
 			"2006-01-02 15:04:05.000000000",
 			"2006-01-02 15:04:05",
 			time.RFC3339,
 		}
 		for _, format := range formats {
-			if parsed, err := time.Parse(format, v); err == nil {
+			if parsed, err := time.ParseInLocation(format, v, time.UTC); err == nil {
 				t = parsed
 				break
 			}
@@ -106,7 +106,7 @@ func FormatTimeAgo(timestamp interface{}) string {
 }
 
 func timeAgo(t time.Time) string {
-	now := time.Now()
+	now := time.Now().UTC()
 	diff := now.Sub(t)
 
 	switch {
