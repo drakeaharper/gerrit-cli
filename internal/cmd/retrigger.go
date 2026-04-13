@@ -14,24 +14,24 @@ var retriggerCmd = &cobra.Command{
 	Short: "Retrigger Canvas LMS build for a change",
 	Long:  `Posts a comment with __TRIGGER_CANVAS_LMS__ to retrigger the build pipeline.`,
 	Args:  cobra.ExactArgs(1),
-	Run:   runRetrigger,
+	RunE: runRetrigger,
 }
 
-func runRetrigger(cmd *cobra.Command, args []string) {
+func runRetrigger(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 
 	// Validate change ID
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	utils.Debugf("Retriggering build for change %s", changeID)
@@ -40,8 +40,9 @@ func runRetrigger(cmd *cobra.Command, args []string) {
 
 	// Post the trigger comment
 	if err := client.PostReview(changeID, "current", "__TRIGGER_CANVAS_LMS__"); err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to post retrigger comment: %w", err))
+		return fmt.Errorf("failed to post retrigger comment: %w", err)
 	}
 
 	utils.Info("Build retrigger comment posted successfully")
+	return nil
 }

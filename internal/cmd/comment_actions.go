@@ -23,8 +23,6 @@ var (
 	resolveMessage string
 )
 
-// reply subcommand
-
 var commentsReplyCmd = &cobra.Command{
 	Use:   "reply <change-id>",
 	Short: "Reply to an inline comment thread",
@@ -34,10 +32,8 @@ Examples:
   gerry comments reply 12345 -t 1 -m "Thanks, fixed"
   gerry comments reply 12345   # interactive picker`,
 	Args: cobra.ExactArgs(1),
-	Run:  runCommentsReply,
+	RunE: runCommentsReply,
 }
-
-// add subcommand
 
 var commentsAddCmd = &cobra.Command{
 	Use:   "add <change-id>",
@@ -48,10 +44,8 @@ Examples:
   gerry comments add 12345 -f main.go -l 42 -m "Consider renaming this"
   gerry comments add 12345   # interactive prompts`,
 	Args: cobra.ExactArgs(1),
-	Run:  runCommentsAdd,
+	RunE: runCommentsAdd,
 }
-
-// resolve subcommand
 
 var commentsResolveCmd = &cobra.Command{
 	Use:   "resolve <change-id>",
@@ -63,10 +57,8 @@ Examples:
   gerry comments resolve 12345 -t 1 -m "Fixed in latest PS"
   gerry comments resolve 12345   # interactive picker`,
 	Args: cobra.ExactArgs(1),
-	Run:  runCommentsResolve,
+	RunE: runCommentsResolve,
 }
-
-// unresolve subcommand
 
 var commentsUnresolveCmd = &cobra.Command{
 	Use:   "unresolve <change-id>",
@@ -77,7 +69,7 @@ Examples:
   gerry comments unresolve 12345 -t 1
   gerry comments unresolve 12345   # interactive picker`,
 	Args: cobra.ExactArgs(1),
-	Run:  runCommentsUnresolve,
+	RunE: runCommentsUnresolve,
 }
 
 func init() {
@@ -95,8 +87,6 @@ func init() {
 	commentsUnresolveCmd.Flags().StringVarP(&resolveMessage, "message", "m", "", "Optional message")
 }
 
-// helpers
-
 func boolPtr(b bool) *bool { return &b }
 
 func getCurrentRevision(client *gerrit.RESTClient, changeID string) (string, error) {
@@ -110,29 +100,28 @@ func getCurrentRevision(client *gerrit.RESTClient, changeID string) (string, err
 	return change.CurrentRevision, nil
 }
 
-func loadConfigAndClient() (*config.Config, *gerrit.RESTClient) {
+func loadConfigAndClient() (*config.Config, *gerrit.RESTClient, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return nil, nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return nil, nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 	if cfg.HTTPPassword == "" {
-		utils.ExitWithError(fmt.Errorf("this command requires REST API access; run 'gerry init' to configure HTTP credentials"))
+		return nil, nil, fmt.Errorf("this command requires REST API access; run 'gerry init' to configure HTTP credentials")
 	}
-	return cfg, gerrit.NewRESTClient(cfg)
+	return cfg, gerrit.NewRESTClient(cfg), nil
 }
 
-func selectThread(threads [][]Comment, threadIdx int, label string) []Comment {
+func selectThread(threads [][]Comment, threadIdx int, label string) ([]Comment, error) {
 	if threadIdx > 0 {
 		if threadIdx > len(threads) {
-			utils.ExitWithError(fmt.Errorf("thread index %d out of range (1-%d)", threadIdx, len(threads)))
+			return nil, fmt.Errorf("thread index %d out of range (1-%d)", threadIdx, len(threads))
 		}
-		return threads[threadIdx-1]
+		return threads[threadIdx-1], nil
 	}
 
-	// Build interactive picker options
 	options := make([]string, len(threads))
 	for i, thread := range threads {
 		if len(thread) == 0 {
@@ -156,58 +145,62 @@ func selectThread(threads [][]Comment, threadIdx int, label string) []Comment {
 		Options: options,
 	}
 	if err := survey.AskOne(prompt, &selected); err != nil {
-		utils.ExitWithError(fmt.Errorf("cancelled: %w", err))
+		return nil, fmt.Errorf("cancelled: %w", err)
 	}
-	return threads[selected]
+	return threads[selected], nil
 }
 
-func promptMessage(flagValue string, label string) string {
+func promptMessage(flagValue string, label string) (string, error) {
 	if flagValue != "" {
-		return flagValue
+		return flagValue, nil
 	}
 	var msg string
 	prompt := &survey.Input{
 		Message: label,
 	}
 	if err := survey.AskOne(prompt, &msg, survey.WithValidator(survey.Required)); err != nil {
-		utils.ExitWithError(fmt.Errorf("cancelled: %w", err))
+		return "", fmt.Errorf("cancelled: %w", err)
 	}
-	return msg
+	return msg, nil
 }
 
-// command implementations
-
-func runCommentsReply(cmd *cobra.Command, args []string) {
+func runCommentsReply(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
-	cfg, client := loadConfigAndClient()
+	cfg, client, err := loadConfigAndClient()
+	if err != nil {
+		return err
+	}
 
-	// Fetch unresolved threads only — matches default `gerry comments` view
-	// so that -t N indices are consistent with what the user sees
 	threads, err := getOrderedThreads(cfg, changeID, false)
 	if err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 	if len(threads) == 0 {
 		fmt.Println("No unresolved comment threads found.")
-		return
+		return nil
 	}
 
-	thread := selectThread(threads, replyThread, "Select thread to reply to:")
-	message := promptMessage(replyMessage, "Reply message:")
+	thread, err := selectThread(threads, replyThread, "Select thread to reply to:")
+	if err != nil {
+		return err
+	}
+	message, err := promptMessage(replyMessage, "Reply message:")
+	if err != nil {
+		return err
+	}
 
-	// Get the last comment in the thread to reply to
 	lastComment := thread[len(thread)-1]
 	if lastComment.ID == "" {
-		utils.ExitWithError(fmt.Errorf("cannot reply: comment ID not available (REST API required)"))
+		return fmt.Errorf("cannot reply: comment ID not available (REST API required)")
 	}
 
 	revision, err := getCurrentRevision(client, changeID)
 	if err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	comments := map[string][]gerrit.ReviewComment{
@@ -220,31 +213,34 @@ func runCommentsReply(cmd *cobra.Command, args []string) {
 	}
 
 	if err := client.PostReviewWithComments(changeID, revision, comments); err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to post reply: %w", err))
+		return fmt.Errorf("failed to post reply: %w", err)
 	}
 
 	fmt.Printf("%s Reply posted to %s:%d\n", utils.Green("✓"), lastComment.File, lastComment.Line)
+	return nil
 }
 
-func runCommentsAdd(cmd *cobra.Command, args []string) {
+func runCommentsAdd(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
-	_, client := loadConfigAndClient()
+	_, client, err := loadConfigAndClient()
+	if err != nil {
+		return err
+	}
 
 	revision, err := getCurrentRevision(client, changeID)
 	if err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
-	// Get file path
 	filePath := addFile
 	if filePath == "" {
 		files, err := client.GetChangeFiles(changeID, revision)
 		if err != nil {
-			utils.ExitWithError(fmt.Errorf("failed to get file list: %w", err))
+			return fmt.Errorf("failed to get file list: %w", err)
 		}
 
 		fileNames := make([]string, 0, len(files))
@@ -257,7 +253,7 @@ func runCommentsAdd(cmd *cobra.Command, args []string) {
 		sort.Strings(fileNames)
 
 		if len(fileNames) == 0 {
-			utils.ExitWithError(fmt.Errorf("no files found in change"))
+			return fmt.Errorf("no files found in change")
 		}
 
 		var selected int
@@ -266,12 +262,11 @@ func runCommentsAdd(cmd *cobra.Command, args []string) {
 			Options: fileNames,
 		}
 		if err := survey.AskOne(prompt, &selected); err != nil {
-			utils.ExitWithError(fmt.Errorf("cancelled: %w", err))
+			return fmt.Errorf("cancelled: %w", err)
 		}
 		filePath = fileNames[selected]
 	}
 
-	// Get line number
 	line := addLine
 	if line == 0 {
 		var lineStr string
@@ -279,15 +274,18 @@ func runCommentsAdd(cmd *cobra.Command, args []string) {
 			Message: "Line number:",
 		}
 		if err := survey.AskOne(prompt, &lineStr, survey.WithValidator(survey.Required)); err != nil {
-			utils.ExitWithError(fmt.Errorf("cancelled: %w", err))
+			return fmt.Errorf("cancelled: %w", err)
 		}
 		line, err = strconv.Atoi(lineStr)
 		if err != nil || line <= 0 {
-			utils.ExitWithError(fmt.Errorf("invalid line number: %s", lineStr))
+			return fmt.Errorf("invalid line number: %s", lineStr)
 		}
 	}
 
-	message := promptMessage(addMessage, "Comment message:")
+	message, err := promptMessage(addMessage, "Comment message:")
+	if err != nil {
+		return err
+	}
 
 	comments := map[string][]gerrit.ReviewComment{
 		filePath: {
@@ -299,36 +297,37 @@ func runCommentsAdd(cmd *cobra.Command, args []string) {
 	}
 
 	if err := client.PostReviewWithComments(changeID, revision, comments); err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to post comment: %w", err))
+		return fmt.Errorf("failed to post comment: %w", err)
 	}
 
 	fmt.Printf("%s Comment added to %s:%d\n", utils.Green("✓"), filePath, line)
+	return nil
 }
 
-func runCommentsResolve(cmd *cobra.Command, args []string) {
-	runResolveAction(args, true)
+func runCommentsResolve(cmd *cobra.Command, args []string) error {
+	return runResolveAction(args, true)
 }
 
-func runCommentsUnresolve(cmd *cobra.Command, args []string) {
-	runResolveAction(args, false)
+func runCommentsUnresolve(cmd *cobra.Command, args []string) error {
+	return runResolveAction(args, false)
 }
 
-func runResolveAction(args []string, resolve bool) {
+func runResolveAction(args []string, resolve bool) error {
 	changeID := args[0]
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
-	cfg, client := loadConfigAndClient()
+	cfg, client, err := loadConfigAndClient()
+	if err != nil {
+		return err
+	}
 
-	// Fetch threads filtered by the opposite state
-	// resolve: show unresolved threads; unresolve: show resolved threads
 	threads, err := getOrderedThreads(cfg, changeID, true)
 	if err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
-	// Filter to relevant threads
 	var filtered [][]Comment
 	for _, thread := range threads {
 		if len(thread) == 0 {
@@ -347,32 +346,37 @@ func runResolveAction(args []string, resolve bool) {
 		} else {
 			fmt.Println("No resolved threads to unresolve.")
 		}
-		return
+		return nil
 	}
 
 	label := "Select thread to resolve:"
 	if !resolve {
 		label = "Select thread to unresolve:"
 	}
-	thread := selectThread(filtered, resolveThread, label)
+	thread, err := selectThread(filtered, resolveThread, label)
+	if err != nil {
+		return err
+	}
 
-	// Determine message
 	message := resolveMessage
 	if message == "" && resolve {
 		message = "Done"
 	}
 	if message == "" && !resolve {
-		message = promptMessage("", "Message:")
+		message, err = promptMessage("", "Message:")
+		if err != nil {
+			return err
+		}
 	}
 
 	lastComment := thread[len(thread)-1]
 	if lastComment.ID == "" {
-		utils.ExitWithError(fmt.Errorf("cannot modify thread: comment ID not available (REST API required)"))
+		return fmt.Errorf("cannot modify thread: comment ID not available (REST API required)")
 	}
 
 	revision, err := getCurrentRevision(client, changeID)
 	if err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	unresolved := !resolve
@@ -391,7 +395,7 @@ func runResolveAction(args []string, resolve bool) {
 		if !resolve {
 			action = "unresolve"
 		}
-		utils.ExitWithError(fmt.Errorf("failed to %s thread: %w", action, err))
+		return fmt.Errorf("failed to %s thread: %w", action, err)
 	}
 
 	if resolve {
@@ -399,4 +403,5 @@ func runResolveAction(args []string, resolve bool) {
 	} else {
 		fmt.Printf("%s Thread on %s:%d marked as unresolved\n", utils.Yellow("!"), lastComment.File, lastComment.Line)
 	}
+	return nil
 }

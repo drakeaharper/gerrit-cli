@@ -24,7 +24,7 @@ var cherryPickCmd = &cobra.Command{
 	Short:   "Cherry-pick a change",
 	Long:    `Fetch and cherry-pick a change. If patchset is not specified, uses the current patch set.`,
 	Args:    cobra.RangeArgs(1, 2),
-	Run:     runCherryPick,
+	RunE: runCherryPick,
 }
 
 func init() {
@@ -32,11 +32,11 @@ func init() {
 	cherryPickCmd.Flags().BoolVar(&cherryPickNoVerify, "no-verify", false, "Skip git hooks during cherry-pick")
 }
 
-func runCherryPick(cmd *cobra.Command, args []string) {
+func runCherryPick(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 	// Validate change ID
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	patchset := ""
@@ -44,27 +44,27 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 		patchset = args[1]
 		// Basic validation for patchset number
 		if patchset != "" && !regexp.MustCompile(`^\d+$`).MatchString(patchset) {
-			utils.ExitWithError(fmt.Errorf("invalid patchset number: %s", patchset))
+			return fmt.Errorf("invalid patchset number: %s", patchset)
 		}
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Check if we're in a git repository
 	if !isGitRepository() {
-		utils.ExitWithError(fmt.Errorf("not in a git repository"))
+		return fmt.Errorf("not in a git repository")
 	}
 
 	// Check if working directory is clean
 	if !isWorkingDirectoryClean() {
-		utils.ExitWithError(fmt.Errorf("working directory is not clean. Please commit or stash your changes"))
+		return fmt.Errorf("working directory is not clean. Please commit or stash your changes")
 	}
 
 	utils.Debugf("Cherry-picking change %s patchset %s", changeID, patchset)
@@ -72,7 +72,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 	// Get change details to build the fetch ref
 	change, err := getChangeForFetch(cfg, changeID)
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to get change details: %w", err))
+		return fmt.Errorf("failed to get change details: %w", err)
 	}
 
 	subject := change.Subject
@@ -82,7 +82,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 	if patchsetNum == "" {
 		patchsetNum = getCurrentPatchsetNumber(change)
 		if patchsetNum == "" {
-			utils.ExitWithError(fmt.Errorf("could not determine current patchset"))
+			return fmt.Errorf("could not determine current patchset")
 		}
 	}
 
@@ -108,7 +108,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 	fmt.Print("Fetching change... ")
 	if err := gitFetch(remoteURL, refsPath); err != nil {
 		fmt.Println(color.RedString("FAILED"))
-		utils.ExitWithError(fmt.Errorf("git fetch failed: %w", err))
+		return fmt.Errorf("git fetch failed: %w", err)
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
@@ -127,10 +127,10 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 				fmt.Println("  • git cherry-pick --continue")
 			}
 			fmt.Println("  • Or run 'git cherry-pick --abort' to abort")
-			os.Exit(0) // Exit normally since this is expected behavior
+			return nil // Conflicts are expected, not an error
 		}
 
-		utils.ExitWithError(fmt.Errorf("cherry-pick failed: %w", err))
+		return fmt.Errorf("cherry-pick failed: %w", err)
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
@@ -151,6 +151,7 @@ func runCherryPick(cmd *cobra.Command, args []string) {
 			fmt.Printf("HEAD is now at %s\n", utils.Gray(head))
 		}
 	}
+	return nil
 }
 
 func isWorkingDirectoryClean() bool {

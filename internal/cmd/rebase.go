@@ -30,7 +30,7 @@ Examples:
   gerry rebase 12345 --base 67890~2
   gerry rebase 12345 --allow-conflicts`,
 	Args: cobra.ExactArgs(1),
-	Run:  runRebase,
+	RunE: runRebase,
 }
 
 func init() {
@@ -38,20 +38,20 @@ func init() {
 	rebaseCmd.Flags().BoolVar(&rebaseAllowConflicts, "allow-conflicts", false, "Allow rebasing with conflicts (creates conflict markers)")
 }
 
-func runRebase(cmd *cobra.Command, args []string) {
+func runRebase(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	client := gerrit.NewRESTClient(cfg)
@@ -64,7 +64,7 @@ func runRebase(cmd *cobra.Command, args []string) {
 
 	change, err := client.RebaseChange(changeID, rebaseBase, rebaseAllowConflicts)
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to rebase change: %w", err))
+		return fmt.Errorf("failed to rebase change: %w", err)
 	}
 
 	fmt.Printf("%s Change rebased successfully!\n", color.GreenString("✓"))
@@ -73,4 +73,5 @@ func runRebase(cmd *cobra.Command, args []string) {
 	if len(change.Revisions) > 0 {
 		fmt.Printf("New patchset count: %d\n", len(change.Revisions))
 	}
+	return nil
 }

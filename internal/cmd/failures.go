@@ -16,22 +16,22 @@ var failuresCmd = &cobra.Command{
 	Short: "Get the most recent build failure link",
 	Long:  `Retrieves the most recent build failure link from Service Cloud Jenkins for a change.`,
 	Args:  cobra.ExactArgs(1),
-	Run:   runFailures,
+	RunE: runFailures,
 }
 
-func runFailures(cmd *cobra.Command, args []string) {
+func runFailures(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	utils.Debugf("Fetching failure links for change %s", changeID)
@@ -39,16 +39,17 @@ func runFailures(cmd *cobra.Command, args []string) {
 	client := gerrit.NewRESTClient(cfg)
 	messages, err := client.GetChangeMessages(changeID)
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to get change messages: %w", err))
+		return fmt.Errorf("failed to get change messages: %w", err)
 	}
 
 	failureLink := findMostRecentFailureLink(messages)
 	if failureLink == "" {
 		utils.Info("No build failure links found from Service Cloud Jenkins")
-		return
+		return nil
 	}
 
 	fmt.Println(failureLink)
+	return nil
 }
 
 func findMostRecentFailureLink(messages []gerrit.ChangeMessageInfo) string {

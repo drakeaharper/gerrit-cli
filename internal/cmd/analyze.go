@@ -50,7 +50,7 @@ Examples:
   # Analyze last 30 days in a specific repo
   gerry analyze --repo canvas-lms --start-date 2025-11-10 --end-date 2025-12-10
 `,
-	Run: runAnalyze,
+	RunE: runAnalyze,
 }
 
 func init() {
@@ -76,21 +76,21 @@ type AnalysisData struct {
 	Changes      []gerrit.Change `json:"changes"`
 }
 
-func runAnalyze(cmd *cobra.Command, args []string) {
+func runAnalyze(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	if _, err := time.Parse("2006-01-02", analyzeStartDate); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid start date format (use YYYY-MM-DD): %w", err))
+		return fmt.Errorf("invalid start date format (use YYYY-MM-DD): %w", err)
 	}
 	if _, err := time.Parse("2006-01-02", analyzeEndDate); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid end date format (use YYYY-MM-DD): %w", err))
+		return fmt.Errorf("invalid end date format (use YYYY-MM-DD): %w", err)
 	}
 
 	utils.Infof("Analyzing changes from %s to %s", analyzeStartDate, analyzeEndDate)
@@ -105,12 +105,12 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 	client := gerrit.NewRESTClientWithTimeout(cfg, timeout)
 	changes, err := fetchAllChangesWithPagination(client)
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to fetch changes: %w", err))
+		return fmt.Errorf("failed to fetch changes: %w", err)
 	}
 
 	if len(changes) == 0 {
 		utils.Info("No changes found in the specified date range")
-		return
+		return nil
 	}
 
 	fmt.Printf("%s Fetched %d total changes\n", color.GreenString("✓"), len(changes))
@@ -133,17 +133,18 @@ func runAnalyze(cmd *cobra.Command, args []string) {
 	case "csv":
 		output = generateCSVReport(analysisData)
 	default:
-		utils.ExitWithError(fmt.Errorf("unknown format: %s (supported: markdown, json, csv)", analyzeFormat))
+		return fmt.Errorf("unknown format: %s (supported: markdown, json, csv)", analyzeFormat)
 	}
 
 	if analyzeOutput != "" {
 		if err := utils.WriteFile(analyzeOutput, []byte(output)); err != nil {
-			utils.ExitWithError(fmt.Errorf("failed to write output file: %w", err))
+			return fmt.Errorf("failed to write output file: %w", err)
 		}
 		fmt.Printf("%s Report saved to: %s\n", color.GreenString("✓"), analyzeOutput)
 	} else {
 		fmt.Print(output)
 	}
+	return nil
 }
 
 func fetchAllChangesWithPagination(client *gerrit.RESTClient) ([]gerrit.Change, error) {

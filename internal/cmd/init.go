@@ -7,7 +7,6 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/drakeaharper/gerrit-cli/internal/config"
 	"github.com/drakeaharper/gerrit-cli/internal/gerrit"
-	"github.com/drakeaharper/gerrit-cli/internal/utils"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -16,10 +15,10 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize gerry configuration",
 	Long:  `Interactive setup wizard to configure your Gerrit connection.`,
-	Run:   runInit,
+	RunE: runInit,
 }
 
-func runInit(cmd *cobra.Command, args []string) {
+func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(color.YellowString("Welcome to gerry setup wizard!"))
 	fmt.Println("This will guide you through setting up your Gerrit connection.")
 
@@ -31,7 +30,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		Help:    "Example: gerrit.example.com",
 	}
 	if err := survey.AskOne(serverPrompt, &cfg.Server, survey.WithValidator(survey.Required)); err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	// Port
@@ -42,7 +41,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 	var portStr string
 	if err := survey.AskOne(portPrompt, &portStr); err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 	fmt.Sscanf(portStr, "%d", &cfg.Port)
 
@@ -52,7 +51,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		Default: os.Getenv("USER"),
 	}
 	if err := survey.AskOne(userPrompt, &cfg.User, survey.WithValidator(survey.Required)); err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	// Inform user about SSH key handling
@@ -65,8 +64,7 @@ func runInit(cmd *cobra.Command, args []string) {
 	if err := sshClient.TestConnection(); err != nil {
 		fmt.Println(color.RedString("FAILED"))
 		fmt.Printf("Error: %v\n", err)
-		fmt.Println("\nPlease check your SSH configuration and try again.")
-		os.Exit(1)
+		return fmt.Errorf("SSH connection failed, check your SSH configuration")
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
@@ -77,7 +75,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		Default: true,
 	}
 	if err := survey.AskOne(restPrompt, &useREST); err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	if useREST {
@@ -88,7 +86,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		}
 		var httpPortStr string
 		if err := survey.AskOne(httpPortPrompt, &httpPortStr); err != nil {
-			utils.ExitWithError(err)
+			return err
 		}
 		if httpPortStr != "" {
 			fmt.Sscanf(httpPortStr, "%d", &cfg.HTTPPort)
@@ -99,7 +97,7 @@ func runInit(cmd *cobra.Command, args []string) {
 			Help:    "Found in Gerrit Settings → HTTP Password",
 		}
 		if err := survey.AskOne(httpPasswordPrompt, &cfg.HTTPPassword); err != nil {
-			utils.ExitWithError(err)
+			return err
 		}
 
 		// Test REST connection
@@ -132,17 +130,18 @@ func runInit(cmd *cobra.Command, args []string) {
 		Help:    "You can specify a default project to use with commands",
 	}
 	if err := survey.AskOne(projectPrompt, &cfg.Project); err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	// Save configuration
 	if err := config.Save(cfg); err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to save configuration: %w", err))
+		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
 	configPath, _ := config.GetConfigPath()
 	fmt.Printf("\n%s Configuration saved to: %s\n", color.GreenString("✓"), configPath)
 	fmt.Println("\nYou're all set! Try running 'gerry list' to see your open changes.")
+	return nil
 }
 
 func init() {

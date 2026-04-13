@@ -21,7 +21,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List changes",
 	Long:  `List your open changes or changes that need your review.`,
-	Run:   runList,
+	RunE: runList,
 }
 
 func init() {
@@ -31,14 +31,14 @@ func init() {
 	listCmd.Flags().StringVar(&listStatus, "status", "open", "Filter by status (open, merged, abandoned)")
 }
 
-func runList(cmd *cobra.Command, args []string) {
+func runList(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Build query based on flags
@@ -58,7 +58,7 @@ func runList(cmd *cobra.Command, args []string) {
 		utils.Info("Falling back to SSH...")
 		changes, err = listChangesSSH(cfg, query, listLimit)
 		if err != nil {
-			utils.ExitWithError(fmt.Errorf("failed to list changes: %w", err))
+			return fmt.Errorf("failed to list changes: %w", err)
 		}
 	}
 
@@ -68,7 +68,7 @@ func runList(cmd *cobra.Command, args []string) {
 		} else {
 			fmt.Println("No changes found.")
 		}
-		return
+		return nil
 	}
 
 	// Display results
@@ -77,6 +77,7 @@ func runList(cmd *cobra.Command, args []string) {
 	} else {
 		displaySimpleChanges(changes)
 	}
+	return nil
 }
 
 func listChangesREST(cfg *config.Config, query string, limit int) ([]gerrit.Change, error) {

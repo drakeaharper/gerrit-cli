@@ -21,24 +21,24 @@ var updateCmd = &cobra.Command{
 	Short: "Update gerry to the latest version",
 	Long: `Update gerry to the latest version by pulling from git and rebuilding.
 This command must be run from within the gerry source directory.`,
-	Run: runUpdate,
+	RunE: runUpdate,
 }
 
 func init() {
 	updateCmd.Flags().BoolVar(&skipPull, "skip-pull", false, "Skip git pull and just rebuild")
 }
 
-func runUpdate(cmd *cobra.Command, args []string) {
+func runUpdate(cmd *cobra.Command, args []string) error {
 	fmt.Println(color.YellowString("Updating gerry..."))
 
 	// Check if we're in a git repository
 	if !isGitRepo() {
-		utils.ExitWithError(fmt.Errorf("not in a git repository. Please run this command from the gerry source directory"))
+		return fmt.Errorf("not in a git repository. Please run this command from the gerry source directory")
 	}
 
 	// Check if Makefile exists
 	if !fileExists("Makefile") {
-		utils.ExitWithError(fmt.Errorf("Makefile not found. Please run this command from the gerry source directory"))
+		return fmt.Errorf("Makefile not found. Please run this command from the gerry source directory")
 	}
 
 	if !skipPull {
@@ -46,7 +46,7 @@ func runUpdate(cmd *cobra.Command, args []string) {
 		fmt.Print("Pulling latest changes... ")
 		if err := runCommand("git", "pull"); err != nil {
 			fmt.Println(color.RedString("FAILED"))
-			utils.ExitWithError(fmt.Errorf("failed to pull changes: %w", err))
+			return fmt.Errorf("failed to pull changes: %w", err)
 		}
 		fmt.Println(color.GreenString("SUCCESS"))
 	}
@@ -55,14 +55,14 @@ func runUpdate(cmd *cobra.Command, args []string) {
 	fmt.Print("Cleaning previous build... ")
 	if err := runCommand("make", "clean"); err != nil {
 		fmt.Println(color.RedString("FAILED"))
-		utils.ExitWithError(fmt.Errorf("failed to clean: %w", err))
+		return fmt.Errorf("failed to clean: %w", err)
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
 	fmt.Print("Building gerry... ")
 	if err := runCommand("make", "build"); err != nil {
 		fmt.Println(color.RedString("FAILED"))
-		utils.ExitWithError(fmt.Errorf("failed to build: %w", err))
+		return fmt.Errorf("failed to build: %w", err)
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
@@ -70,7 +70,7 @@ func runUpdate(cmd *cobra.Command, args []string) {
 	fmt.Print("Installing gerry... ")
 	if err := installBinary(); err != nil {
 		fmt.Println(color.RedString("FAILED"))
-		utils.ExitWithError(fmt.Errorf("failed to install: %w", err))
+		return fmt.Errorf("failed to install: %w", err)
 	}
 	fmt.Println(color.GreenString("SUCCESS"))
 
@@ -98,6 +98,7 @@ func runUpdate(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Printf("\n%s gerry has been updated successfully!\n", color.GreenString("✓"))
+	return nil
 }
 
 func isGitRepo() bool {

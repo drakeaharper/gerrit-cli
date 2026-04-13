@@ -29,7 +29,7 @@ Subcommands:
 
 When called without a subcommand, displays comments on the change.`,
 	Args: cobra.ArbitraryArgs,
-	Run:  runComments,
+	RunE: runComments,
 }
 
 func init() {
@@ -40,30 +40,30 @@ func init() {
 	commentsCmd.AddCommand(commentsUnresolveCmd)
 }
 
-func runComments(cmd *cobra.Command, args []string) {
+func runComments(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		cmd.Help()
-		return
+		return nil
 	}
 	changeID := args[0]
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	utils.Debugf("Fetching comments for change %s", changeID)
 
 	threads, err := getOrderedThreads(cfg, changeID, showAll)
 	if err != nil {
-		utils.ExitWithError(err)
+		return err
 	}
 
 	if len(threads) == 0 {
@@ -72,10 +72,11 @@ func runComments(cmd *cobra.Command, args []string) {
 		} else {
 			fmt.Println("No unresolved comment threads found. Use --all to show all comments.")
 		}
-		return
+		return nil
 	}
 
 	displayThreads(threads)
+	return nil
 }
 
 // Comment is the display-layer representation of a comment, normalized across API sources.

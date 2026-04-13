@@ -24,7 +24,7 @@ var fetchCmd = &cobra.Command{
 	Short: "Fetch a change",
 	Long:  `Fetch a change and checkout to FETCH_HEAD. If patchset is not specified, fetches the current patch set.`,
 	Args:  cobra.RangeArgs(1, 2),
-	Run:   runFetch,
+	RunE: runFetch,
 }
 
 func init() {
@@ -32,11 +32,11 @@ func init() {
 	fetchCmd.Flags().BoolVar(&noVerify, "no-verify", false, "Skip git hooks during checkout")
 }
 
-func runFetch(cmd *cobra.Command, args []string) {
+func runFetch(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 	// Validate change ID
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	patchset := ""
@@ -44,22 +44,22 @@ func runFetch(cmd *cobra.Command, args []string) {
 		patchset = args[1]
 		// Basic validation for patchset number
 		if patchset != "" && !regexp.MustCompile(`^\d+$`).MatchString(patchset) {
-			utils.ExitWithError(fmt.Errorf("invalid patchset number: %s", patchset))
+			return fmt.Errorf("invalid patchset number: %s", patchset)
 		}
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Check if we're in a git repository
 	if !isGitRepository() {
-		utils.ExitWithError(fmt.Errorf("not in a git repository"))
+		return fmt.Errorf("not in a git repository")
 	}
 
 	utils.Debugf("Fetching change %s patchset %s", changeID, patchset)
@@ -67,7 +67,7 @@ func runFetch(cmd *cobra.Command, args []string) {
 	// Get change details to build the fetch ref
 	change, err := getChangeForFetch(cfg, changeID)
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to get change details: %w", err))
+		return fmt.Errorf("failed to get change details: %w", err)
 	}
 
 	// Determine patchset number
@@ -75,7 +75,7 @@ func runFetch(cmd *cobra.Command, args []string) {
 	if patchsetNum == "" {
 		patchsetNum = getCurrentPatchsetNumber(change)
 		if patchsetNum == "" {
-			utils.ExitWithError(fmt.Errorf("could not determine current patchset"))
+			return fmt.Errorf("could not determine current patchset")
 		}
 	}
 
@@ -97,7 +97,7 @@ func runFetch(cmd *cobra.Command, args []string) {
 
 	// Execute git fetch
 	if err := gitFetch(remoteURL, refsPath); err != nil {
-		utils.ExitWithError(fmt.Errorf("git fetch failed: %w", err))
+		return fmt.Errorf("git fetch failed: %w", err)
 	}
 
 	fmt.Printf("%s Successfully fetched change\n", color.GreenString("✓"))
@@ -107,7 +107,7 @@ func runFetch(cmd *cobra.Command, args []string) {
 		fmt.Print("Checking out to FETCH_HEAD... ")
 		if err := gitCheckout("FETCH_HEAD", noVerify); err != nil {
 			fmt.Println(color.RedString("FAILED"))
-			utils.ExitWithError(fmt.Errorf("checkout failed: %w", err))
+			return fmt.Errorf("checkout failed: %w", err)
 		}
 		fmt.Println(color.GreenString("SUCCESS"))
 
@@ -124,6 +124,7 @@ func runFetch(cmd *cobra.Command, args []string) {
 	if !checkoutFetch {
 		fmt.Println("Use 'git checkout FETCH_HEAD' to switch to the fetched change")
 	}
+	return nil
 }
 
 func getChangeForFetch(cfg *config.Config, changeID string) (*gerrit.Change, error) {

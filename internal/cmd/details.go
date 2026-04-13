@@ -20,26 +20,26 @@ var detailsCmd = &cobra.Command{
 	Short: "Show change details",
 	Long:  `Show comprehensive information about a change including files, reviewers, and scores.`,
 	Args:  cobra.ExactArgs(1),
-	Run:   runDetails,
+	RunE: runDetails,
 }
 
 func init() {
 	detailsCmd.Flags().BoolVar(&showFiles, "files", false, "Show list of changed files")
 }
 
-func runDetails(cmd *cobra.Command, args []string) {
+func runDetails(cmd *cobra.Command, args []string) error {
 	changeID := args[0]
 	if err := utils.ValidateChangeID(changeID); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid change ID: %w", err))
+		return fmt.Errorf("invalid change ID: %w", err)
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	utils.Debugf("Fetching details for change %s", changeID)
@@ -50,7 +50,7 @@ func runDetails(cmd *cobra.Command, args []string) {
 		utils.Info("Falling back to SSH...")
 		change, err = getChangeDetailsSSH(cfg, changeID)
 		if err != nil {
-			utils.ExitWithError(fmt.Errorf("failed to get change details: %w", err))
+			return fmt.Errorf("failed to get change details: %w", err)
 		}
 	}
 
@@ -60,6 +60,7 @@ func runDetails(cmd *cobra.Command, args []string) {
 		fmt.Println()
 		displayChangeFiles(cfg, changeID, change)
 	}
+	return nil
 }
 
 func getChangeDetailsREST(cfg *config.Config, changeID string) (*gerrit.Change, error) {

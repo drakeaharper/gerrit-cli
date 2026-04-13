@@ -22,7 +22,7 @@ var teamCmd = &cobra.Command{
 	Use:   "team",
 	Short: "Show changes where you are a reviewer or CC'd",
 	Long:  `Show changes where you are either a reviewer or CC'd on.`,
-	Run:   runTeam,
+	RunE: runTeam,
 }
 
 func init() {
@@ -33,14 +33,14 @@ func init() {
 	teamCmd.Flags().StringVarP(&teamFilter, "filter", "f", "", "Additional Gerrit query filter (e.g., 'ownerin:learning-experience' or '-owner:user@example.com')")
 }
 
-func runTeam(cmd *cobra.Command, args []string) {
+func runTeam(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		utils.ExitWithError(fmt.Errorf("failed to load configuration: %w", err))
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		utils.ExitWithError(fmt.Errorf("invalid configuration: %w", err))
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	verifiedFilter := ""
@@ -70,13 +70,13 @@ func runTeam(cmd *cobra.Command, args []string) {
 		utils.Info("Falling back to SSH...")
 		changes, err = listTeamChangesSSH(cfg, query, teamLimit)
 		if err != nil {
-			utils.ExitWithError(fmt.Errorf("failed to list changes: %w", err))
+			return fmt.Errorf("failed to list changes: %w", err)
 		}
 	}
 
 	if len(changes) == 0 {
 		fmt.Println("No changes found where you are a reviewer or CC'd.")
-		return
+		return nil
 	}
 
 	if teamDetailed {
@@ -84,6 +84,7 @@ func runTeam(cmd *cobra.Command, args []string) {
 	} else {
 		displayTeamSimpleChanges(changes)
 	}
+	return nil
 }
 
 func listTeamChangesREST(cfg *config.Config, query string, limit int) ([]gerrit.Change, error) {
