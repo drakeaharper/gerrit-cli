@@ -28,6 +28,9 @@ var (
 	Cyan       = color.New(color.FgCyan).SprintFunc()
 	Gray       = color.New(color.FgHiBlack).SprintFunc()
 	Dim        = color.New(color.Faint).SprintFunc()
+
+	// ansiRegex matches ANSI escape codes for accurate visual length calculation
+	ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 )
 
 func FormatChangeStatus(status string) string {
@@ -168,7 +171,6 @@ func PadString(s string, width int) string {
 
 // stripANSI removes ANSI color codes from a string for accurate length calculation
 func stripANSI(s string) string {
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	return ansiRegex.ReplaceAllString(s, "")
 }
 
