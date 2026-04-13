@@ -35,8 +35,6 @@ func (c *SSHClient) ExecuteCommand(command string) (string, error) {
 
 // ExecuteCommandArgs executes a Gerrit command with properly separated arguments
 func (c *SSHClient) ExecuteCommandArgs(args ...string) (string, error) {
-	// Build SSH command with proper argument separation
-	// SSH key selection is handled by SSH client configuration
 	sshArgs := []string{
 		"-p", fmt.Sprintf("%d", c.config.Port),
 		"-o", "StrictHostKeyChecking=accept-new",
@@ -44,7 +42,6 @@ func (c *SSHClient) ExecuteCommandArgs(args ...string) (string, error) {
 		fmt.Sprintf("%s@%s", c.config.User, c.config.Server),
 		"gerrit",
 	}
-	// Append Gerrit command arguments
 	sshArgs = append(sshArgs, args...)
 
 	cmd := exec.Command("ssh", sshArgs...)
@@ -85,8 +82,6 @@ func (c *SSHClient) StreamCommand(command string, output io.Writer) error {
 
 // StreamCommandArgs streams output from a Gerrit command with properly separated arguments
 func (c *SSHClient) StreamCommandArgs(output io.Writer, args ...string) error {
-	// Build SSH command with proper argument separation
-	// SSH key selection is handled by SSH client configuration
 	sshArgs := []string{
 		"-p", fmt.Sprintf("%d", c.config.Port),
 		"-o", "StrictHostKeyChecking=accept-new",
@@ -94,7 +89,6 @@ func (c *SSHClient) StreamCommandArgs(output io.Writer, args ...string) error {
 		fmt.Sprintf("%s@%s", c.config.User, c.config.Server),
 		"gerrit",
 	}
-	// Append Gerrit command arguments
 	sshArgs = append(sshArgs, args...)
 
 	cmd := exec.Command("ssh", sshArgs...)

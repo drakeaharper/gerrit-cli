@@ -15,7 +15,6 @@ type Config struct {
 	HTTPPort     int    `json:"http_port,omitempty"`
 	User         string `json:"user"`
 	HTTPPassword string `json:"http_password,omitempty"`
-	SSHKey       string `json:"ssh_key,omitempty"`
 	Project      string `json:"project,omitempty"`
 }
 
@@ -149,13 +148,10 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Note: SSH key validation removed - SSH client will handle key selection
-
 	return nil
 }
 
 func (c *Config) GetSSHCommand() string {
-	// SSH key selection is now handled by SSH client configuration
 	return fmt.Sprintf("ssh -p %d %s@%s gerrit", c.Port, c.User, c.Server)
 }
 
