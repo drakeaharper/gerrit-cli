@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -322,9 +323,10 @@ func generateJSONReport(data AnalysisData) string {
 
 func generateCSVReport(data AnalysisData) string {
 	var sb strings.Builder
+	w := csv.NewWriter(&sb)
 
 	// CSV Header
-	sb.WriteString("change_number,project,subject,owner_name,owner_email,status,created,updated,submitted\n")
+	w.Write([]string{"change_number", "project", "subject", "owner_name", "owner_email", "status", "created", "updated", "submitted"})
 
 	// CSV Rows
 	for _, change := range data.Changes {
@@ -332,10 +334,6 @@ func generateCSVReport(data AnalysisData) string {
 		if changeNum == "" {
 			changeNum = getStringValue(change, "number")
 		}
-
-		project := getStringValue(change, "project")
-		subject := strings.ReplaceAll(getStringValue(change, "subject"), ",", " ")
-		subject = strings.ReplaceAll(subject, "\"", "'")
 
 		ownerName := ""
 		ownerEmail := ""
@@ -347,15 +345,20 @@ func generateCSVReport(data AnalysisData) string {
 			ownerEmail = getStringValue(owner, "email")
 		}
 
-		status := getStringValue(change, "status")
-		created := getStringValue(change, "created")
-		updated := getStringValue(change, "updated")
-		submitted := getStringValue(change, "submitted")
-
-		sb.WriteString(fmt.Sprintf("%s,%s,\"%s\",%s,%s,%s,%s,%s,%s\n",
-			changeNum, project, subject, ownerName, ownerEmail, status, created, updated, submitted))
+		w.Write([]string{
+			changeNum,
+			getStringValue(change, "project"),
+			getStringValue(change, "subject"),
+			ownerName,
+			ownerEmail,
+			getStringValue(change, "status"),
+			getStringValue(change, "created"),
+			getStringValue(change, "updated"),
+			getStringValue(change, "submitted"),
+		})
 	}
 
+	w.Flush()
 	return sb.String()
 }
 
