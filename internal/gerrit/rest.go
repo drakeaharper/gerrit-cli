@@ -272,6 +272,23 @@ func (c *RESTClient) PostReviewWithComments(changeID, revision string, comments 
 	return err
 }
 
+// PostVote posts label votes (and optional message) via the Set Review endpoint.
+func (c *RESTClient) PostVote(changeID, revision, message string, labels map[string]int) error {
+	if len(labels) == 0 {
+		return fmt.Errorf("at least one label vote is required")
+	}
+	path := fmt.Sprintf("changes/%s/revisions/%s/review", changeID, revision)
+	data := map[string]interface{}{
+		"labels": labels,
+	}
+	if message != "" {
+		data["message"] = message
+	}
+
+	_, err := c.Post(path, data)
+	return err
+}
+
 // AddReviewer adds a reviewer or CC to a change
 // state should be "REVIEWER" or "CC"
 func (c *RESTClient) AddReviewer(changeID string, reviewer string, state string) error {

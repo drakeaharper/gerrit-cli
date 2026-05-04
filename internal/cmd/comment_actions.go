@@ -19,6 +19,7 @@ var (
 	addFile        string
 	addLine        int
 	addMessage     string
+	addUnresolved  bool
 	resolveThread  int
 	resolveMessage string
 )
@@ -79,6 +80,7 @@ func init() {
 	commentsAddCmd.Flags().StringVarP(&addFile, "file", "f", "", "File path to comment on")
 	commentsAddCmd.Flags().IntVarP(&addLine, "line", "l", 0, "Line number to comment on")
 	commentsAddCmd.Flags().StringVarP(&addMessage, "message", "m", "", "Comment message")
+	commentsAddCmd.Flags().BoolVar(&addUnresolved, "unresolved", true, "Mark new comment thread as unresolved")
 
 	commentsResolveCmd.Flags().IntVarP(&resolveThread, "thread", "t", 0, "Thread index (from gerry comments output)")
 	commentsResolveCmd.Flags().StringVarP(&resolveMessage, "message", "m", "", "Optional message (default: \"Done\")")
@@ -290,8 +292,9 @@ func runCommentsAdd(cmd *cobra.Command, args []string) error {
 	comments := map[string][]gerrit.ReviewComment{
 		filePath: {
 			{
-				Line:    line,
-				Message: message,
+				Line:       line,
+				Message:    message,
+				Unresolved: boolPtr(addUnresolved),
 			},
 		},
 	}
@@ -300,7 +303,11 @@ func runCommentsAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to post comment: %w", err)
 	}
 
-	fmt.Printf("%s Comment added to %s:%d\n", utils.Green("✓"), filePath, line)
+	state := "unresolved"
+	if !addUnresolved {
+		state = "resolved"
+	}
+	fmt.Printf("%s Comment added to %s:%d (%s)\n", utils.Green("✓"), filePath, line, state)
 	return nil
 }
 
