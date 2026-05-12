@@ -69,6 +69,31 @@ func getLabelStatus(change gerrit.Change, labelName string) string {
 	return utils.Gray("—")
 }
 
+// getMergeableStatus renders the mergeable indicator for the table view.
+// Returns gray "-" when the server did not supply a value (SSH fallback).
+func getMergeableStatus(change gerrit.Change) string {
+	known, mergeable := change.MergeableState()
+	if !known {
+		return utils.Gray("-")
+	}
+	if mergeable {
+		return utils.Green("✓")
+	}
+	return utils.Red("✗")
+}
+
+// formatMergeableDetail renders the mergeable state for the detailed view.
+func formatMergeableDetail(change gerrit.Change) string {
+	known, mergeable := change.MergeableState()
+	if !known {
+		return utils.Gray("unknown")
+	}
+	if mergeable {
+		return utils.Green("yes")
+	}
+	return utils.Red("no (merge conflict)")
+}
+
 // getAuthorName extracts a display name from an untyped account map.
 // Used for label internals where the structure varies across Gerrit versions.
 func getAuthorName(author map[string]interface{}) string {
@@ -159,6 +184,7 @@ func displayDetailedChanges(changes []gerrit.Change) {
 		fmt.Printf("%s %s\n", utils.BoldCyan("Branch:"), change.Branch)
 		fmt.Printf("%s %s\n", utils.BoldCyan("Owner:"), change.Owner.DisplayName())
 		fmt.Printf("%s %s\n", utils.BoldCyan("Updated:"), utils.FormatTimeAgo(change.UpdatedTime()))
+		fmt.Printf("%s %s\n", utils.BoldCyan("Mergeable:"), formatMergeableDetail(change))
 
 		// Show review scores if available
 		if len(change.Labels) > 0 {

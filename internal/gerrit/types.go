@@ -84,6 +84,7 @@ type Change struct {
 	Reviewers       map[string][]Account    `json:"reviewers,omitempty"`
 	MoreChanges     bool                    `json:"_more_changes,omitempty"`
 	URL             string                  `json:"url,omitempty"`
+	Mergeable       *bool                   `json:"mergeable,omitempty"`
 
 	// Labels kept as untyped map — internal structure varies across Gerrit versions
 	Labels map[string]interface{} `json:"labels,omitempty"`
@@ -117,6 +118,15 @@ func (c Change) UpdatedTime() string {
 		return time.Unix(c.LastUpdated, 0).UTC().Format("2006-01-02 15:04:05")
 	}
 	return ""
+}
+
+// MergeableState reports whether Gerrit returned a mergeable value and what it was.
+// known is false when the field was absent (e.g. SSH path or option not requested).
+func (c Change) MergeableState() (known bool, mergeable bool) {
+	if c.Mergeable == nil {
+		return false, false
+	}
+	return true, *c.Mergeable
 }
 
 // CurrentPatchSetNumber returns the current patchset number.

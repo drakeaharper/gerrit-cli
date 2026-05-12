@@ -86,6 +86,42 @@ func TestChangePatchSetNumber(t *testing.T) {
 	}
 }
 
+func TestChangeMergeableState(t *testing.T) {
+	tr := true
+	fa := false
+
+	tests := []struct {
+		name        string
+		change      Change
+		wantKnown   bool
+		wantMerge   bool
+	}{
+		{"nil", Change{}, false, false},
+		{"true", Change{Mergeable: &tr}, true, true},
+		{"false", Change{Mergeable: &fa}, true, false},
+	}
+
+	for _, tt := range tests {
+		known, mergeable := tt.change.MergeableState()
+		if known != tt.wantKnown || mergeable != tt.wantMerge {
+			t.Errorf("%s: MergeableState() = (%v, %v), want (%v, %v)",
+				tt.name, known, mergeable, tt.wantKnown, tt.wantMerge)
+		}
+	}
+}
+
+func TestChangeUnmarshalMergeable(t *testing.T) {
+	jsonData := `{"_number": 1, "project": "p", "branch": "main", "subject": "s", "status": "NEW", "owner": {}, "mergeable": false}`
+	var change Change
+	if err := json.Unmarshal([]byte(jsonData), &change); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	known, mergeable := change.MergeableState()
+	if !known || mergeable {
+		t.Errorf("MergeableState() = (%v, %v), want (true, false)", known, mergeable)
+	}
+}
+
 func TestChangeUnmarshalREST(t *testing.T) {
 	jsonData := `{
 		"_number": 12345,
