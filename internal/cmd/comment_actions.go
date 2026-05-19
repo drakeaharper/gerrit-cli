@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,9 +23,18 @@ var (
 	addLine        int
 	addMessage     string
 	addUnresolved  bool
+	addBatch       string
 	resolveThread  int
 	resolveMessage string
 )
+
+// batchCommentInput is the JSON shape accepted by `comments add --batch`.
+type batchCommentInput struct {
+	File       string `json:"file"`
+	Line       int    `json:"line"`
+	Message    string `json:"message"`
+	Unresolved *bool  `json:"unresolved,omitempty"`
+}
 
 var commentsReplyCmd = &cobra.Command{
 	Use:   "reply <change-id>",
@@ -41,9 +53,22 @@ var commentsAddCmd = &cobra.Command{
 	Short: "Add a new inline comment on a file",
 	Long: `Add a new inline comment on a specific file and line of a change.
 
+Use --batch to post many comments in a single REST call. The batch file is a
+JSON array of objects with fields: file, line, message, unresolved (optional,
+defaults to true). Pass "-" to read from stdin.
+
 Examples:
   gerry comments add 12345 -f main.go -l 42 -m "Consider renaming this"
-  gerry comments add 12345   # interactive prompts`,
+  gerry comments add 12345 --batch comments.json
+  cat comments.json | gerry comments add 12345 --batch -
+  gerry comments add 12345   # interactive prompts
+
+Batch JSON shape:
+  [
+    {"file": "main.go", "line": 10, "message": "rename"},
+    {"file": "main.go", "line": 42, "message": "nit", "unresolved": false},
+    {"file": "util.go", "line": 7,  "message": "dead code"}
+  ]`,
 	Args: cobra.ExactArgs(1),
 	RunE: runCommentsAdd,
 }
@@ -81,6 +106,7 @@ func init() {
 	commentsAddCmd.Flags().IntVarP(&addLine, "line", "l", 0, "Line number to comment on")
 	commentsAddCmd.Flags().StringVarP(&addMessage, "message", "m", "", "Comment message")
 	commentsAddCmd.Flags().BoolVar(&addUnresolved, "unresolved", true, "Mark new comment thread as unresolved")
+	commentsAddCmd.Flags().StringVar(&addBatch, "batch", "", "Path to JSON file with multiple comments, or \"-\" for stdin")
 
 	commentsResolveCmd.Flags().IntVarP(&resolveThread, "thread", "t", 0, "Thread index (from gerry comments output)")
 	commentsResolveCmd.Flags().StringVarP(&resolveMessage, "message", "m", "", "Optional message (default: \"Done\")")
@@ -236,6 +262,10 @@ func runCommentsAdd(cmd *cobra.Command, args []string) error {
 	revision, err := getCurrentRevision(client, changeID)
 	if err != nil {
 		return err
+	}
+
+	if addBatch != "" {
+		return runCommentsAddBatch(client, changeID, revision, addBatch)
 	}
 
 	filePath := addFile
@@ -411,4 +441,64 @@ func runResolveAction(args []string, resolve bool) error {
 		fmt.Printf("%s Thread on %s:%d marked as unresolved\n", utils.Yellow("!"), lastComment.File, lastComment.Line)
 	}
 	return nil
+}
+
+func runCommentsAddBatch(client *gerrit.RESTClient, changeID, revision, source string) error {
+	data, err := readBatchSource(source)
+	if err != nil {
+		return err
+	}
+
+	var inputs []batchCommentInput
+	if err := json.Unmarshal(data, &inputs); err != nil {
+		return fmt.Errorf("failed to parse batch JSON: %w", err)
+	}
+	if len(inputs) == 0 {
+		return fmt.Errorf("batch contains no comments")
+	}
+
+	comments := make(map[string][]gerrit.ReviewComment, len(inputs))
+	for i, in := range inputs {
+		if in.File == "" {
+			return fmt.Errorf("batch entry %d: file is required", i+1)
+		}
+		if in.Line <= 0 {
+			return fmt.Errorf("batch entry %d (%s): line must be > 0", i+1, in.File)
+		}
+		if strings.TrimSpace(in.Message) == "" {
+			return fmt.Errorf("batch entry %d (%s:%d): message is required", i+1, in.File, in.Line)
+		}
+		unresolved := in.Unresolved
+		if unresolved == nil {
+			unresolved = boolPtr(true)
+		}
+		comments[in.File] = append(comments[in.File], gerrit.ReviewComment{
+			Line:       in.Line,
+			Message:    in.Message,
+			Unresolved: unresolved,
+		})
+	}
+
+	if err := client.PostReviewWithComments(changeID, revision, comments); err != nil {
+		return fmt.Errorf("failed to post batch comments: %w", err)
+	}
+
+	fmt.Printf("%s Posted %d comment(s) across %d file(s)\n",
+		utils.Green("✓"), len(inputs), len(comments))
+	return nil
+}
+
+func readBatchSource(source string) ([]byte, error) {
+	if source == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read batch from stdin: %w", err)
+		}
+		return data, nil
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read batch file %s: %w", source, err)
+	}
+	return data, nil
 }
