@@ -5,10 +5,11 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 ## Features
 
 - **Easy Setup**: Interactive configuration wizard with `gerry init`
-- **List Changes**: View your open changes with `gerry list`
+- **List Changes**: View your open changes with `gerry list` (includes mergeable status)
 - **Team Review**: See changes where you're a reviewer or CC'd with `gerry team`
 - **Share Changes**: Add reviewers and CCs to changes with `gerry share`
-- **Review Comments**: Read review comments directly in terminal with `gerry comments`
+- **Review Comments**: Read, reply to, add, resolve, and unresolve inline comments with `gerry comments` (supports batch posting)
+- **Vote on Changes**: Post label votes (Code-Review, QA-Review, Product-Review, Lint-Review, Verified) with `gerry vote`
 - **Change Details**: Get comprehensive change information with `gerry details`
 - **Local Workflow**: Fetch and cherry-pick changes with `gerry fetch` and `gerry cherry-pick`
 - **Worktree Management**: Review changes in isolated worktrees with `gerry tree`
@@ -133,6 +134,55 @@ gerry comments 384465
 
 # View all comments (resolved and unresolved)
 gerry comments 384465 --all
+```
+
+**Posting comments:**
+```bash
+# Reply to a comment thread (interactive picker)
+gerry comments reply 384465
+
+# Reply to a specific thread by index from `gerry comments` output
+gerry comments reply 384465 -t 2 -m "Thanks, fixed in PS3"
+
+# Add a new inline comment on a file/line
+gerry comments add 384465 -f main.go -l 42 -m "Consider renaming this"
+
+# Add a resolved comment instead of unresolved
+gerry comments add 384465 -f main.go -l 42 -m "nit" --unresolved=false
+
+# Post many comments in a single REST call via a JSON batch file
+gerry comments add 384465 --batch comments.json
+
+# Stream a batch from stdin
+cat comments.json | gerry comments add 384465 --batch -
+
+# Mark a thread as resolved (or unresolved)
+gerry comments resolve 384465 -t 1
+gerry comments unresolve 384465 -t 1 -m "Reopening — still an issue"
+```
+
+Batch JSON shape:
+```json
+[
+  {"file": "main.go", "line": 10, "message": "rename"},
+  {"file": "main.go", "line": 42, "message": "nit", "unresolved": false},
+  {"file": "util.go", "line": 7,  "message": "dead code"}
+]
+```
+
+**Voting on changes:**
+```bash
+# Code-Review +2
+gerry vote 384465 --cr +2
+
+# Multiple labels with a message
+gerry vote 384465 --cr +1 --qa +1 -m "LGTM after CI"
+
+# Product-Review and Verified
+gerry vote 384465 --pr +1 --verified +1
+
+# Arbitrary label via -l NAME=VALUE (repeatable)
+gerry vote 384465 -l Code-Review=+2 -l QA-Review=+1
 ```
 
 ### Analysis Workflows
@@ -346,6 +396,41 @@ See [docs/analyze_command.md](docs/analyze_command.md) for detailed usage exampl
 ### `gerry comments <change-id>`
 View comments on a specific change.
 - `--all`: Show all comments (default: unresolved only)
+
+Subcommands:
+
+- `gerry comments reply <change-id>` — Reply to an inline comment thread.
+  - `-t, --thread`: Thread index (from `gerry comments` output); omit for an interactive picker.
+  - `-m, --message`: Reply message.
+- `gerry comments add <change-id>` — Add a new inline comment.
+  - `-f, --file`: File path to comment on.
+  - `-l, --line`: Line number.
+  - `-m, --message`: Comment message.
+  - `--unresolved`: Mark new thread as unresolved (default `true`).
+  - `--batch`: Path to a JSON file with multiple comments, or `-` for stdin. Posts all entries in a single REST call.
+- `gerry comments resolve <change-id>` — Mark a thread as resolved.
+  - `-t, --thread`: Thread index.
+  - `-m, --message`: Optional message (defaults to `Done`).
+- `gerry comments unresolve <change-id>` — Mark a thread as unresolved.
+  - `-t, --thread`: Thread index.
+  - `-m, --message`: Optional message.
+
+### `gerry vote <change-id>`
+Post label votes via Gerrit's Set Review API. Shortcut flags cover common labels; use `-l NAME=VALUE` for any other label.
+- `--cr`: Code-Review vote (`-2`..`+2`)
+- `--qa`: QA-Review vote
+- `--pr`: Product-Review vote
+- `--lint`: Lint-Review vote
+- `--verified`: Verified vote
+- `-l, --label`: Arbitrary `NAME=VALUE` label vote (repeatable)
+- `-m, --message`: Optional message to attach
+
+Examples:
+```bash
+gerry vote 12345 --cr +2
+gerry vote 12345 --cr +1 --qa +1 -m "LGTM"
+gerry vote 12345 -l Code-Review=+2 -l QA-Review=+1
+```
 
 ### `gerry details <change-id>`
 Show comprehensive information about a change including files, reviewers, and scores.
