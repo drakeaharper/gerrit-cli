@@ -15,41 +15,54 @@ func getLabelStatus(change gerrit.Change, labelName string) string {
 	// REST API format: labels[labelName] is a LabelInfo-like object
 	if change.Labels != nil {
 		if labelData, exists := change.Labels[labelName].(map[string]interface{}); exists {
-			// Check approved map (highest positive vote)
+			// Prefer the "all" array (DETAILED_LABELS): it carries the exact
+			// numeric value of every vote, so we can show ±2 not just ±1.
+			if all, hasAll := labelData["all"].([]interface{}); hasAll && len(all) > 0 {
+				hasVote := false
+				maxScore := 0
+				minScore := 0
+				for _, vote := range all {
+					voteMap, ok := vote.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					value, ok := voteMap["value"]
+					if !ok {
+						continue
+					}
+					score, ok := value.(float64)
+					if !ok {
+						continue
+					}
+					hasVote = true
+					if int(score) > maxScore {
+						maxScore = int(score)
+					}
+					if int(score) < minScore {
+						minScore = int(score)
+					}
+				}
+				if hasVote {
+					// A negative vote blocks, so it takes precedence in display.
+					if minScore < 0 {
+						return utils.FormatScore(labelName, minScore)
+					}
+					return utils.FormatScore(labelName, maxScore)
+				}
+			}
+			// Fallback for the LABELS summary (no "all" array): approved/rejected
+			// carry only the approver account, so the value is inferred.
 			if approved, hasApproved := labelData["approved"].(map[string]interface{}); hasApproved {
 				if value, ok := approved["value"]; ok {
 					return utils.FormatScore(labelName, value)
 				}
-				// approved present but no value field — infer positive
 				return utils.FormatScore(labelName, 1)
 			}
-			// Check rejected map (lowest negative vote)
 			if rejected, hasRejected := labelData["rejected"].(map[string]interface{}); hasRejected {
 				if value, ok := rejected["value"]; ok {
 					return utils.FormatScore(labelName, value)
 				}
-				// rejected present but no value field — infer negative
 				return utils.FormatScore(labelName, -1)
-			}
-			// Check individual votes in "all" array
-			if all, hasAll := labelData["all"].([]interface{}); hasAll && len(all) > 0 {
-				hasVote := false
-				maxScore := -3
-				for _, vote := range all {
-					if voteMap, ok := vote.(map[string]interface{}); ok {
-						if value, ok := voteMap["value"]; ok {
-							if score, ok := value.(float64); ok {
-								hasVote = true
-								if int(score) > maxScore {
-									maxScore = int(score)
-								}
-							}
-						}
-					}
-				}
-				if hasVote {
-					return utils.FormatScore(labelName, maxScore)
-				}
 			}
 			// Label exists but no votes
 			return utils.Gray("0")

@@ -166,7 +166,7 @@ func (c *RESTClient) TestConnection() error {
 
 // GetChange retrieves a change by ID
 func (c *RESTClient) GetChange(changeID string) (*Change, error) {
-	resp, err := c.Get(fmt.Sprintf("changes/%s?o=LABELS&o=CURRENT_REVISION&o=CURRENT_COMMIT&o=DETAILED_ACCOUNTS", changeID))
+	resp, err := c.Get(fmt.Sprintf("changes/%s?o=DETAILED_LABELS&o=CURRENT_REVISION&o=CURRENT_COMMIT&o=DETAILED_ACCOUNTS", changeID))
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (c *RESTClient) GetChangeComments(changeID string) (map[string][]CommentInf
 
 // ListChanges lists changes based on query
 func (c *RESTClient) ListChanges(query string, limit int) ([]Change, error) {
-	path := fmt.Sprintf("changes/?q=%s&n=%d&o=LABELS&o=CURRENT_REVISION&o=DETAILED_ACCOUNTS", query, limit)
+	path := fmt.Sprintf("changes/?q=%s&n=%d&o=DETAILED_LABELS&o=CURRENT_REVISION&o=DETAILED_ACCOUNTS", query, limit)
 	resp, err := c.Get(path)
 	if err != nil {
 		return nil, err
