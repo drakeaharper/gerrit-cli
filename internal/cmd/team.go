@@ -105,7 +105,7 @@ func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]gerrit.C
 }
 
 func displayTeamSimpleChanges(changes []gerrit.Change) {
-	headers := []string{"Change", "Subject", "Owner", "CR", "QR", "LR", "Verified", "Merge", "Updated"}
+	headers := []string{"Change", "Subject", "Owner", "CR", "QR", "LR", "V", "M", "Updated"}
 	var rows [][]string
 
 	for _, change := range changes {
@@ -118,7 +118,7 @@ func displayTeamSimpleChanges(changes []gerrit.Change) {
 			getLabelStatus(change, "Lint-Review"),
 			getLabelStatus(change, "Verified"),
 			getMergeableStatus(change),
-			utils.FormatTimeAgo(change.UpdatedTime()),
+			utils.FormatTimeAgoShort(change.UpdatedTime()),
 		})
 	}
 

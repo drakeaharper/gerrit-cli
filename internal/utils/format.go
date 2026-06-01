@@ -105,6 +105,61 @@ func FormatTimeAgo(timestamp interface{}) string {
 	return Dim(timeAgo(t))
 }
 
+// FormatTimeAgoShort renders a compact relative time like "3w", "2d", "5h", "now".
+func FormatTimeAgoShort(timestamp interface{}) string {
+	var t time.Time
+
+	switch v := timestamp.(type) {
+	case string:
+		formats := []string{
+			"2006-01-02 15:04:05.000000000",
+			"2006-01-02 15:04:05",
+			time.RFC3339,
+		}
+		for _, format := range formats {
+			if parsed, err := time.ParseInLocation(format, v, time.UTC); err == nil {
+				t = parsed
+				break
+			}
+		}
+	case time.Time:
+		t = v
+	case float64:
+		t = time.Unix(int64(v), 0)
+	case int64:
+		t = time.Unix(v, 0)
+	default:
+		return Gray("?")
+	}
+
+	if t.IsZero() {
+		return Gray("?")
+	}
+
+	return Dim(timeAgoShort(t))
+}
+
+func timeAgoShort(t time.Time) string {
+	diff := time.Now().UTC().Sub(t)
+
+	switch {
+	case diff < time.Minute:
+		return "now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%dm", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(diff.Hours()))
+	case diff < 7*24*time.Hour:
+		return fmt.Sprintf("%dd", int(diff.Hours()/24))
+	case diff < 30*24*time.Hour:
+		return fmt.Sprintf("%dw", int(diff.Hours()/(24*7)))
+	case diff < 365*24*time.Hour:
+		return fmt.Sprintf("%dmo", int(diff.Hours()/(24*30)))
+	default:
+		return fmt.Sprintf("%dy", int(diff.Hours()/(24*365)))
+	}
+}
+
 func timeAgo(t time.Time) string {
 	now := time.Now().UTC()
 	diff := now.Sub(t)

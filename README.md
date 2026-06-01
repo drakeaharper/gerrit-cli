@@ -363,6 +363,8 @@ List your open changes.
 - `--status`: Filter by status (open, merged, abandoned)
 - `--limit`: Maximum number of changes to show
 
+Column headers are abbreviated to keep the table compact: `CR` (Code-Review), `QR` (QA-Review), `LR` (Lint-Review), `V` (Verified), `M` (Mergeable). `Updated` shows a compact relative time (`5h`, `2d`, `3w`).
+
 ### `gerry team`
 Show changes where you are a reviewer or CC'd.
 - `--detailed`: Show detailed information
@@ -370,6 +372,8 @@ Show changes where you are a reviewer or CC'd.
 - `--all-verified`: Include changes with all verified states (default: only Verified+1)
 - `-f, --filter`: Additional Gerrit query filter (e.g., `ownerin:learning-experience`)
 - `-n, --limit`: Maximum number of changes to show (default 25)
+
+Uses the same abbreviated columns as `gerry list`: `CR`, `QR`, `LR`, `V` (Verified), `M` (Mergeable), plus compact relative times in `Updated`.
 
 ### `gerry share <change-id>`
 Add reviewers or CCs to a change.
