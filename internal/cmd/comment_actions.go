@@ -128,6 +128,18 @@ func getCurrentRevision(client *gerrit.RESTClient, changeID string) (string, err
 	return change.CurrentRevision, nil
 }
 
+// revisionForComment returns the revision-id to post a reply against. Gerrit
+// accepts a numeric patch set identifier as a revision-id, so anchoring the
+// reply to the parent comment's patch set keeps the new comment on the same
+// line (and thus the same thread) as the comment it replies to. Falls back to
+// the current revision when the patch set is unknown (e.g. SSH-sourced data).
+func revisionForComment(client *gerrit.RESTClient, changeID string, parent Comment) (string, error) {
+	if parent.PatchSet > 0 {
+		return strconv.Itoa(parent.PatchSet), nil
+	}
+	return getCurrentRevision(client, changeID)
+}
+
 func loadConfigAndClient() (*config.Config, *gerrit.RESTClient, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -226,7 +238,7 @@ func runCommentsReply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot reply: comment ID not available (REST API required)")
 	}
 
-	revision, err := getCurrentRevision(client, changeID)
+	revision, err := revisionForComment(client, changeID, lastComment)
 	if err != nil {
 		return err
 	}
@@ -235,6 +247,7 @@ func runCommentsReply(cmd *cobra.Command, args []string) error {
 		lastComment.File: {
 			{
 				InReplyTo: lastComment.ID,
+				Line:      lastComment.Line,
 				Message:   message,
 			},
 		},
@@ -411,7 +424,7 @@ func runResolveAction(args []string, resolve bool) error {
 		return fmt.Errorf("cannot modify thread: comment ID not available (REST API required)")
 	}
 
-	revision, err := getCurrentRevision(client, changeID)
+	revision, err := revisionForComment(client, changeID, lastComment)
 	if err != nil {
 		return err
 	}
@@ -421,6 +434,7 @@ func runResolveAction(args []string, resolve bool) error {
 		lastComment.File: {
 			{
 				InReplyTo:  lastComment.ID,
+				Line:       lastComment.Line,
 				Message:    message,
 				Unresolved: boolPtr(unresolved),
 			},
