@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/drakeaharper/gerrit-cli/internal/config"
@@ -24,9 +25,31 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	cfg := &config.Config{}
 
+	// Detect an existing configuration and pre-fill prompts with its values.
+	existing, _ := config.Load()
+	if existing != nil {
+		*cfg = *existing
+		if configPath, err := config.GetConfigPath(); err == nil {
+			fmt.Printf("\nExisting configuration detected at %s.\n", configPath)
+		}
+		fmt.Println("Press Enter to keep the current value shown as the default.")
+	}
+
+	// Default for the SSH port prompt
+	sshPortDefault := "29418"
+	if cfg.Port != 0 {
+		sshPortDefault = fmt.Sprintf("%d", cfg.Port)
+	}
+	// Default for the username prompt
+	userDefault := os.Getenv("USER")
+	if cfg.User != "" {
+		userDefault = cfg.User
+	}
+
 	// Server details
 	serverPrompt := &survey.Input{
 		Message: "Gerrit server hostname:",
+		Default: cfg.Server,
 		Help:    "Example: gerrit.example.com",
 	}
 	if err := survey.AskOne(serverPrompt, &cfg.Server, survey.WithValidator(survey.Required)); err != nil {
@@ -36,7 +59,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Port
 	portPrompt := &survey.Input{
 		Message: "SSH port:",
-		Default: "29418",
+		Default: sshPortDefault,
 		Help:    "Default Gerrit SSH port is 29418",
 	}
 	var portStr string
@@ -48,7 +71,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Username
 	userPrompt := &survey.Input{
 		Message: "Your Gerrit username:",
-		Default: os.Getenv("USER"),
+		Default: userDefault,
 	}
 	if err := survey.AskOne(userPrompt, &cfg.User, survey.WithValidator(survey.Required)); err != nil {
 		return err
@@ -69,6 +92,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(color.GreenString("SUCCESS"))
 
 	// HTTP Password
+	hadPassword := cfg.HTTPPassword != ""
+	httpPortDefault := ""
+	if cfg.HTTPPort != 0 {
+		httpPortDefault = fmt.Sprintf("%d", cfg.HTTPPort)
+	}
+
 	useREST := false
 	restPrompt := &survey.Confirm{
 		Message: "Do you want to configure REST API access? (recommended for full functionality)",
@@ -81,8 +110,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if useREST {
 		// Ask for HTTP port
 		httpPortPrompt := &survey.Input{
-			Message: "HTTP/HTTPS port (leave blank to auto-detect):",
-			Help:    "Common ports: 443 (HTTPS), 8080 (HTTP), 8443 (HTTPS alternate)",
+			Message: "HTTP/HTTPS port (optional, blank = use server default):",
+			Default: httpPortDefault,
+			Help:    "Only set this if your Gerrit uses a non-standard port. Common ports: 443 (HTTPS), 8080 (HTTP), 8443 (HTTPS alternate)",
 		}
 		var httpPortStr string
 		if err := survey.AskOne(httpPortPrompt, &httpPortStr); err != nil {
@@ -92,12 +122,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Sscanf(httpPortStr, "%d", &cfg.HTTPPort)
 		}
 
+		passwordMessage := "HTTP password:"
+		if hadPassword {
+			passwordMessage = "HTTP password (leave blank to keep existing):"
+		}
 		httpPasswordPrompt := &survey.Password{
-			Message: "HTTP password:",
+			Message: passwordMessage,
 			Help:    "Found in Gerrit Settings → HTTP Password",
 		}
-		if err := survey.AskOne(httpPasswordPrompt, &cfg.HTTPPassword); err != nil {
+		var httpPassword string
+		if err := survey.AskOne(httpPasswordPrompt, &httpPassword); err != nil {
 			return err
+		}
+		// Keep the existing password when the user leaves the prompt blank.
+		if httpPassword != "" {
+			cfg.HTTPPassword = httpPassword
 		}
 
 		// Test REST connection
@@ -107,9 +146,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Println(color.RedString("FAILED"))
 			fmt.Printf("Error: %v\n", err)
 
-			// If auto-detect failed, suggest trying with explicit port
-			if cfg.HTTPPort == 0 {
-				fmt.Println("\nAuto-detection may have failed. Common HTTP ports are:")
+			switch {
+			case strings.Contains(err.Error(), "401"):
+				// Auth failure: the HTTP password is missing, wrong, or not generated yet
+				fmt.Printf("\nThis is an authentication problem, not a port problem.\n")
+				fmt.Printf("Generate an HTTP password in Gerrit: Settings → HTTP Credentials\n")
+				fmt.Printf("  %s\n", cfg.GetHTTPBaseURL()+"/settings/#HTTPCredentials")
+				fmt.Println("Then run 'gerry init' again and paste the generated password.")
+			case cfg.HTTPPort == 0:
+				// No explicit port and not an auth error: a non-standard port may be needed
+				fmt.Println("\nThe server default port did not work. Common HTTP ports are:")
 				fmt.Println("  - 443 (HTTPS)")
 				fmt.Println("  - 8080 (HTTP)")
 				fmt.Println("  - 8443 (HTTPS alternate)")

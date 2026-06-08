@@ -155,6 +155,36 @@ func (c *Config) GetSSHCommand() string {
 	return fmt.Sprintf("ssh -p %d %s@%s gerrit", c.Port, c.User, c.Server)
 }
 
+// GetHTTPBaseURL returns the browser-facing base URL for the Gerrit server
+// (no /a/ API prefix, no auth), e.g. for linking to the settings page.
+func (c *Config) GetHTTPBaseURL() string {
+	protocol := "https"
+	port := c.HTTPPort
+
+	if port == 0 {
+		if c.Port == 29418 {
+			port = 443
+		} else {
+			port = c.Port
+		}
+	}
+
+	switch port {
+	case 80, 8080:
+		protocol = "http"
+	case 443, 8443:
+		protocol = "https"
+	default:
+		protocol = "https"
+	}
+
+	if (protocol == "https" && port == 443) || (protocol == "http" && port == 80) {
+		return fmt.Sprintf("%s://%s", protocol, c.Server)
+	}
+
+	return fmt.Sprintf("%s://%s:%d", protocol, c.Server, port)
+}
+
 func (c *Config) GetRESTURL(path string) string {
 	protocol := "https"
 	port := c.HTTPPort
