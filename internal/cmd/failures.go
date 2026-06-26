@@ -16,7 +16,7 @@ var failuresCmd = &cobra.Command{
 	Short: "Get the most recent build failure link",
 	Long:  `Retrieves the most recent build failure link from Service Cloud Jenkins for a change.`,
 	Args:  cobra.ExactArgs(1),
-	RunE: runFailures,
+	RunE:  runFailures,
 }
 
 func runFailures(cmd *cobra.Command, args []string) error {
@@ -42,19 +42,60 @@ func runFailures(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get change messages: %w", err)
 	}
 
-	failureLink := findMostRecentFailureLink(messages)
-	if failureLink == "" {
+	result := findMostRecentFailure(messages)
+	if result.SummaryLink == "" {
 		utils.Info("No build failure links found from Service Cloud Jenkins")
 		return nil
 	}
 
-	fmt.Println(failureLink)
+	printFailures(result)
 	return nil
 }
 
-func findMostRecentFailureLink(messages []gerrit.ChangeMessageInfo) string {
-	jenkinsLinkPattern := regexp.MustCompile(`https://jenkins\.inst-ci\.net/job/Canvas/job/[^/]+/\d+//build-summary-report/`)
+func printFailures(result failureResult) {
+	fmt.Printf("%s %s\n", utils.BoldRed("Build Failed"), utils.Dim("/o\\"))
+	fmt.Println()
 
+	fmt.Printf("%s\n", utils.BoldWhite("Summary report"))
+	fmt.Printf("  %s\n", utils.Cyan(result.SummaryLink))
+
+	for _, s := range result.Sections {
+		fmt.Println()
+		fmt.Printf("%s\n", utils.BoldWhite(fmt.Sprintf("%s (%d)", s.Title, len(s.Failures))))
+		for _, f := range s.Failures {
+			fmt.Printf("  %s %s\n", utils.BoldRed("✗"), f.Name)
+			fmt.Printf("    %s\n", utils.Dim(f.Link))
+		}
+	}
+}
+
+// buildFailure is a single failed job/test linked in a failure section.
+type buildFailure struct {
+	Name string
+	Link string
+}
+
+// failureSection is a named group of failures, e.g. "Test failures" or "Build failures".
+type failureSection struct {
+	Title    string
+	Failures []buildFailure
+}
+
+// failureResult holds the build summary link and all failure sections.
+type failureResult struct {
+	SummaryLink string
+	Sections    []failureSection
+}
+
+var (
+	summaryLinkPattern = regexp.MustCompile(`https://jenkins\.inst-ci\.net/job/Canvas/job/[^/]+/\d+/+build-summary-report/`)
+	// a section header line, e.g. "Test failures:" or "Build failures:"
+	sectionHeaderPattern = regexp.MustCompile(`^\s*([A-Za-z][^:\[\]()]*failures)\s*:\s*$`)
+	// a markdown link, e.g. "[Name](url)"
+	markdownLinkPattern = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
+)
+
+func findMostRecentFailure(messages []gerrit.ChangeMessageInfo) failureResult {
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 
@@ -67,10 +108,41 @@ func findMostRecentFailureLink(messages []gerrit.ChangeMessageInfo) string {
 			continue
 		}
 
-		if match := jenkinsLinkPattern.FindString(msg.Message); match != "" {
-			return match
+		summary := summaryLinkPattern.FindString(msg.Message)
+		if summary == "" {
+			continue
+		}
+
+		return failureResult{
+			SummaryLink: summary,
+			Sections:    parseFailureSections(msg.Message),
 		}
 	}
 
-	return ""
+	return failureResult{}
+}
+
+// parseFailureSections walks the message line by line, grouping markdown-link
+// items under the most recent "... failures:" header.
+func parseFailureSections(message string) []failureSection {
+	var sections []failureSection
+	current := -1
+
+	for _, line := range strings.Split(message, "\n") {
+		if h := sectionHeaderPattern.FindStringSubmatch(line); h != nil {
+			sections = append(sections, failureSection{Title: strings.TrimSpace(h[1])})
+			current = len(sections) - 1
+			continue
+		}
+
+		if current == -1 {
+			continue
+		}
+
+		if m := markdownLinkPattern.FindStringSubmatch(line); m != nil {
+			sections[current].Failures = append(sections[current].Failures, buildFailure{Name: m[1], Link: m[2]})
+		}
+	}
+
+	return sections
 }
