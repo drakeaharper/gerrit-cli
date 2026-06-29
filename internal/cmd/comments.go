@@ -313,16 +313,95 @@ func displayThreads(threads [][]Comment) {
 	}
 }
 
+// buildCommentThreads groups comments into threads by Gerrit reply-chain
+// (in_reply_to), not by (file, line). A thread is the chain rooted at a comment
+// with no in_reply_to (or one whose parent is missing from the set), so multiple
+// independent threads can share the same line.
+//
+// When comments carry no IDs (e.g. SSH-sourced data, where in_reply_to is also
+// unavailable), it falls back to the legacy (file, line) grouping.
 func buildCommentThreads(comments []Comment) [][]Comment {
+	hasIDs := false
+	for _, c := range comments {
+		if c.ID != "" {
+			hasIDs = true
+			break
+		}
+	}
+	if !hasIDs {
+		return buildCommentThreadsByLine(comments)
+	}
+
+	byID := make(map[string]Comment, len(comments))
+	children := make(map[string][]Comment)
+	for _, c := range comments {
+		if c.ID != "" {
+			byID[c.ID] = c
+		}
+	}
+	for _, c := range comments {
+		children[c.InReplyTo] = append(children[c.InReplyTo], c)
+	}
+	for parent := range children {
+		sort.Slice(children[parent], func(i, j int) bool {
+			return children[parent][i].Updated < children[parent][j].Updated
+		})
+	}
+
+	// Roots are comments with no parent in this set: an empty in_reply_to, or
+	// an in_reply_to pointing at a comment we don't have.
+	var roots []Comment
+	for _, c := range comments {
+		if c.InReplyTo == "" {
+			continue
+		}
+		if _, ok := byID[c.InReplyTo]; ok {
+			continue
+		}
+		// Parent missing — treat this comment as a root.
+		roots = append(roots, c)
+	}
+	roots = append(roots, children[""]...)
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i].Updated < roots[j].Updated
+	})
+
+	threads := [][]Comment{}
+	for _, root := range roots {
+		var chain []Comment
+		walkThreadChain(root, children, &chain)
+		threads = append(threads, chain)
+	}
+
+	return threads
+}
+
+// walkThreadChain depth-first collects a comment and all its descendant replies.
+func walkThreadChain(c Comment, children map[string][]Comment, chain *[]Comment) {
+	*chain = append(*chain, c)
+	if c.ID == "" {
+		return
+	}
+	for _, child := range children[c.ID] {
+		walkThreadChain(child, children, chain)
+	}
+}
+
+func buildCommentThreadsByLine(comments []Comment) [][]Comment {
 	threadMap := make(map[string][]Comment)
+	var order []string
 
 	for _, comment := range comments {
 		threadKey := fmt.Sprintf("%s:%d", comment.File, comment.Line)
+		if _, seen := threadMap[threadKey]; !seen {
+			order = append(order, threadKey)
+		}
 		threadMap[threadKey] = append(threadMap[threadKey], comment)
 	}
 
 	threads := [][]Comment{}
-	for _, thread := range threadMap {
+	for _, key := range order {
+		thread := threadMap[key]
 		sort.Slice(thread, func(i, j int) bool {
 			return thread[i].Updated < thread[j].Updated
 		})
