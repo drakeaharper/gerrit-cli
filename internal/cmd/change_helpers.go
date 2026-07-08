@@ -134,11 +134,15 @@ func getLabelMinScore(change gerrit.Change, labelName string) (hasVote bool, min
 	return hasVote, min
 }
 
-// isReviewable reports whether a change is ready for a reviewer's eyes — i.e. it
-// carries no blocking negative vote. A Code-Review -1/-2, a QA-Review -1, or a
-// Lint-Review -2 means the author still owes changes, so it is not yet worth
-// reviewing.
+// isReviewable reports whether a change is ready for a reviewer's eyes. A change
+// is not reviewable when it has a merge conflict (the author must rebase first)
+// or carries a blocking negative vote — Code-Review -1/-2, QA-Review -1, or
+// Lint-Review -2 — meaning the author still owes changes. Mergeability is only
+// considered when Gerrit reported it; an unknown state does not disqualify.
 func isReviewable(change gerrit.Change) bool {
+	if known, mergeable := change.MergeableState(); known && !mergeable {
+		return false
+	}
 	if hasVote, min := getLabelMinScore(change, "Code-Review"); hasVote && min < 0 {
 		return false
 	}

@@ -35,6 +35,11 @@ func TestIsReviewable(t *testing.T) {
 		{"Lint -2 blocks", changeWithLabels(map[string]interface{}{"Lint-Review": restLabel(-2)}), false},
 		{"Lint -1 does not block", changeWithLabels(map[string]interface{}{"Lint-Review": restLabel(-1)}), true},
 		{"Lint +1", changeWithLabels(map[string]interface{}{"Lint-Review": restLabel(1)}), true},
+		// Mergeable state gates reviewability independently of votes.
+		{"merge conflict blocks", gerrit.Change{Mergeable: boolPtr(false)}, false},
+		{"mergeable is reviewable", gerrit.Change{Mergeable: boolPtr(true)}, true},
+		{"conflict overrides +2 CR", gerrit.Change{Mergeable: boolPtr(false), Labels: map[string]interface{}{"Code-Review": restLabel(2)}}, false},
+		{"unknown mergeable does not block", gerrit.Change{}, true},
 	}
 
 	for _, tc := range cases {
