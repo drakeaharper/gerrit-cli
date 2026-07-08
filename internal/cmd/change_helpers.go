@@ -82,6 +82,111 @@ func getLabelStatus(change gerrit.Change, labelName string) string {
 	return utils.Gray("—")
 }
 
+// getLabelMinScore returns the lowest numeric vote for a label across both the
+// REST (labels[...]["all"]) and SSH (currentPatchSet.approvals) formats.
+// hasVote is false when nobody has voted on the label.
+func getLabelMinScore(change gerrit.Change, labelName string) (hasVote bool, min int) {
+	if change.Labels != nil {
+		if labelData, ok := change.Labels[labelName].(map[string]interface{}); ok {
+			// DETAILED_LABELS: the "all" array carries every exact vote value.
+			if all, ok := labelData["all"].([]interface{}); ok {
+				for _, vote := range all {
+					voteMap, ok := vote.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					score, ok := voteMap["value"].(float64)
+					if !ok {
+						continue
+					}
+					if !hasVote || int(score) < min {
+						min = int(score)
+					}
+					hasVote = true
+				}
+			}
+			// LABELS summary fallback: "rejected" carries only the approver, so
+			// the exact value is inferred (-1 when absent).
+			if !hasVote {
+				if rejected, ok := labelData["rejected"].(map[string]interface{}); ok {
+					v := -1
+					if value, ok := rejected["value"].(float64); ok {
+						v = int(value)
+					}
+					return true, v
+				}
+			}
+		}
+	}
+
+	// SSH API format: currentPatchSet.approvals.
+	if !hasVote && change.CurrentPatchSet != nil {
+		for _, approval := range change.CurrentPatchSet.Approvals {
+			if approval.Type == labelName {
+				if !hasVote || approval.Value < min {
+					min = approval.Value
+				}
+				hasVote = true
+			}
+		}
+	}
+
+	return hasVote, min
+}
+
+// isReviewable reports whether a change is ready for a reviewer's eyes — i.e. it
+// carries no blocking negative vote. A Code-Review -1/-2, a QA-Review -1, or a
+// Lint-Review -2 means the author still owes changes, so it is not yet worth
+// reviewing.
+func isReviewable(change gerrit.Change) bool {
+	if hasVote, min := getLabelMinScore(change, "Code-Review"); hasVote && min < 0 {
+		return false
+	}
+	if hasVote, min := getLabelMinScore(change, "QA-Review"); hasVote && min < 0 {
+		return false
+	}
+	if hasVote, min := getLabelMinScore(change, "Lint-Review"); hasVote && min <= -2 {
+		return false
+	}
+	return true
+}
+
+// partitionReviewable splits changes into reviewable and not-reviewable buckets,
+// preserving the original ordering within each bucket.
+func partitionReviewable(changes []gerrit.Change) (reviewable, notReviewable []gerrit.Change) {
+	for _, change := range changes {
+		if isReviewable(change) {
+			reviewable = append(reviewable, change)
+		} else {
+			notReviewable = append(notReviewable, change)
+		}
+	}
+	return reviewable, notReviewable
+}
+
+// displayChangeSections renders two vertical sections — reviewable and not
+// reviewable — each as its own table. buildRow maps a change to a table row.
+func displayChangeSections(headers []string, changes []gerrit.Change, buildRow func(gerrit.Change) []string) {
+	reviewable, notReviewable := partitionReviewable(changes)
+
+	printSection := func(title string, subset []gerrit.Change) {
+		fmt.Println(utils.BoldWhite(fmt.Sprintf("%s (%d)", title, len(subset))))
+		if len(subset) == 0 {
+			fmt.Println(utils.Gray("  (none)"))
+			return
+		}
+		rows := make([][]string, 0, len(subset))
+		for _, change := range subset {
+			rows = append(rows, buildRow(change))
+		}
+		fmt.Print(utils.FormatTable(headers, rows, 2))
+	}
+
+	printSection("Reviewable", reviewable)
+	fmt.Println()
+	printSection("Not reviewable", notReviewable)
+}
+
 // getMergeableStatus renders the mergeable indicator for the table view.
 // Returns gray "-" when the server did not supply a value (SSH fallback).
 func getMergeableStatus(change gerrit.Change) string {
