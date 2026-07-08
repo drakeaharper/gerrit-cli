@@ -128,16 +128,63 @@ func getCurrentRevision(client *gerrit.RESTClient, changeID string) (string, err
 	return change.CurrentRevision, nil
 }
 
-// revisionForComment returns the revision-id to post a reply against. Gerrit
-// accepts a numeric patch set identifier as a revision-id, so anchoring the
-// reply to the parent comment's patch set keeps the new comment on the same
-// line (and thus the same thread) as the comment it replies to. Falls back to
-// the current revision when the patch set is unknown (e.g. SSH-sourced data).
-func revisionForComment(client *gerrit.RESTClient, changeID string, parent Comment) (string, error) {
-	if parent.PatchSet > 0 {
-		return strconv.Itoa(parent.PatchSet), nil
+// postThreadReply posts a reply (optionally toggling resolution) onto an
+// existing comment thread.
+//
+// The reply is posted against the change's CURRENT revision, not the patch set
+// the parent comment lives on. Gerrit's Set-Review requires every comment's
+// path to be in that revision's changed-file list; a comment can be anchored to
+// an older patch set where its file is NOT part of the diff (e.g. the commented
+// line was only removed in a later patch set), and posting there fails with a
+// 400 "file ... not found in revision". The current revision is where the
+// thread's file is actually part of the diff, and in_reply_to keeps the reply
+// in the same thread regardless of which patch set it is posted against.
+//
+// If the file/line does not map onto the current revision (the file was deleted
+// there, or the line is out of range) the inline post is retried as a
+// file-level reply, which skips line validation while still threading.
+func postThreadReply(client *gerrit.RESTClient, changeID string, thread []Comment, message string, unresolved *bool) error {
+	file, reply, err := buildThreadReply(thread, message, unresolved)
+	if err != nil {
+		return err
 	}
-	return getCurrentRevision(client, changeID)
+
+	revision, err := getCurrentRevision(client, changeID)
+	if err != nil {
+		return err
+	}
+
+	err = client.PostReviewWithComments(changeID, revision, map[string][]gerrit.ReviewComment{file: {reply}})
+	if err != nil {
+		// Retry as a file-level reply (no line) in case the line no longer maps
+		// onto the current revision. Threading is preserved by in_reply_to.
+		reply.Line = 0
+		if ferr := client.PostReviewWithComments(changeID, revision, map[string][]gerrit.ReviewComment{file: {reply}}); ferr == nil {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// buildThreadReply builds the file key and comment payload for a reply to an
+// existing thread. It uses the thread ROOT's file and line for the reply's
+// coordinates and points in_reply_to at the thread's LAST comment so the reply
+// lands in the same thread. The revision to post against is decided by the
+// caller (the current revision — see postThreadReply).
+func buildThreadReply(thread []Comment, message string, unresolved *bool) (file string, reply gerrit.ReviewComment, err error) {
+	root := thread[0]
+	last := thread[len(thread)-1]
+	if last.ID == "" {
+		return "", gerrit.ReviewComment{}, fmt.Errorf("comment ID not available (REST API required)")
+	}
+
+	return root.File, gerrit.ReviewComment{
+		InReplyTo:  last.ID,
+		Line:       root.Line,
+		Message:    message,
+		Unresolved: unresolved,
+	}, nil
 }
 
 func loadConfigAndClient() (*config.Config, *gerrit.RESTClient, error) {
@@ -233,31 +280,12 @@ func runCommentsReply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	lastComment := thread[len(thread)-1]
-	if lastComment.ID == "" {
-		return fmt.Errorf("cannot reply: comment ID not available (REST API required)")
-	}
-
-	revision, err := revisionForComment(client, changeID, lastComment)
-	if err != nil {
-		return err
-	}
-
-	comments := map[string][]gerrit.ReviewComment{
-		lastComment.File: {
-			{
-				InReplyTo: lastComment.ID,
-				Line:      lastComment.Line,
-				Message:   message,
-			},
-		},
-	}
-
-	if err := client.PostReviewWithComments(changeID, revision, comments); err != nil {
+	if err := postThreadReply(client, changeID, thread, message, nil); err != nil {
 		return fmt.Errorf("failed to post reply: %w", err)
 	}
 
-	fmt.Printf("%s Reply posted to %s:%d\n", utils.Green("✓"), lastComment.File, lastComment.Line)
+	root := thread[0]
+	fmt.Printf("%s Reply posted to %s:%d\n", utils.Green("✓"), root.File, root.Line)
 	return nil
 }
 
@@ -419,29 +447,7 @@ func runResolveAction(args []string, resolve bool) error {
 		}
 	}
 
-	lastComment := thread[len(thread)-1]
-	if lastComment.ID == "" {
-		return fmt.Errorf("cannot modify thread: comment ID not available (REST API required)")
-	}
-
-	revision, err := revisionForComment(client, changeID, lastComment)
-	if err != nil {
-		return err
-	}
-
-	unresolved := !resolve
-	comments := map[string][]gerrit.ReviewComment{
-		lastComment.File: {
-			{
-				InReplyTo:  lastComment.ID,
-				Line:       lastComment.Line,
-				Message:    message,
-				Unresolved: boolPtr(unresolved),
-			},
-		},
-	}
-
-	if err := client.PostReviewWithComments(changeID, revision, comments); err != nil {
+	if err := postThreadReply(client, changeID, thread, message, boolPtr(!resolve)); err != nil {
 		action := "resolve"
 		if !resolve {
 			action = "unresolve"
@@ -449,10 +455,11 @@ func runResolveAction(args []string, resolve bool) error {
 		return fmt.Errorf("failed to %s thread: %w", action, err)
 	}
 
+	root := thread[0]
 	if resolve {
-		fmt.Printf("%s Thread on %s:%d marked as resolved\n", utils.Green("✓"), lastComment.File, lastComment.Line)
+		fmt.Printf("%s Thread on %s:%d marked as resolved\n", utils.Green("✓"), root.File, root.Line)
 	} else {
-		fmt.Printf("%s Thread on %s:%d marked as unresolved\n", utils.Yellow("!"), lastComment.File, lastComment.Line)
+		fmt.Printf("%s Thread on %s:%d marked as unresolved\n", utils.Yellow("!"), root.File, root.Line)
 	}
 	return nil
 }

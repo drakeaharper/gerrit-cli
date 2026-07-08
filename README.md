@@ -9,7 +9,7 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 - **Team Review**: See changes where you're a reviewer or CC'd with `gerry team`
 - **Share Changes**: Add reviewers and CCs to changes with `gerry share`
 - **Review Comments**: Read, reply to, add, resolve, and unresolve inline comments with `gerry comments` (supports batch posting)
-- **Vote on Changes**: Post label votes (Code-Review, QA-Review, Product-Review, Lint-Review, Verified) with `gerry vote`
+- **Vote on Changes**: Post label votes (Code-Review, QA-Review, Product-Review, Lint-Review, Verified) with `gerry vote`, or a message-only comment with `gerry comment`
 - **Change Details**: Get comprehensive change information with `gerry details`
 - **Local Workflow**: Fetch and cherry-pick changes with `gerry fetch` and `gerry cherry-pick`
 - **Worktree Management**: Review changes in isolated worktrees with `gerry tree`
@@ -183,6 +183,9 @@ gerry vote 384465 --pr +1 --verified +1
 
 # Arbitrary label via -l NAME=VALUE (repeatable)
 gerry vote 384465 -l Code-Review=+2 -l QA-Review=+1
+
+# Message only, no vote (also: gerry vote 384465 -m "...")
+gerry comment 384465 -m "responded to the feedback above"
 ```
 
 ### Analysis Workflows

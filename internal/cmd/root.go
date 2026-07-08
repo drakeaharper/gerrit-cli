@@ -49,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(teamCmd)
 	rootCmd.AddCommand(commentsCmd)
+	rootCmd.AddCommand(commentCmd)
 	rootCmd.AddCommand(detailsCmd)
 	rootCmd.AddCommand(fetchCmd)
 	rootCmd.AddCommand(cherryPickCmd)

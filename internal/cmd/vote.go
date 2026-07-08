@@ -31,11 +31,14 @@ var voteCmd = &cobra.Command{
 	Long: `Post label votes (Code-Review, QA-Review, Product-Review, Lint-Review, Verified)
 on a Gerrit change. Use shortcut flags for common labels or -l NAME=VALUE for any label.
 
+With only -m and no label flags, posts a message-only change comment (no vote).
+
 Examples:
   gerry vote 12345 --cr +2
   gerry vote 12345 --cr +1 --qa +1 -m "LGTM"
   gerry vote 12345 --pr +1 --verified +1
-  gerry vote 12345 -l Code-Review=+2 -l QA-Review=+1`,
+  gerry vote 12345 -l Code-Review=+2 -l QA-Review=+1
+  gerry vote 12345 -m "responded to feedback"   # message only, no vote`,
 	Args: cobra.ExactArgs(1),
 	RunE: runVote,
 }
@@ -89,8 +92,8 @@ func runVote(cmd *cobra.Command, args []string) error {
 		labels[name] = n
 	}
 
-	if len(labels) == 0 {
-		return fmt.Errorf("at least one vote flag is required (--cr, --qa, --pr, --lint, --verified, or -l NAME=VALUE)")
+	if len(labels) == 0 && voteMessage == "" {
+		return fmt.Errorf("provide a vote flag (--cr, --qa, --pr, --lint, --verified, or -l NAME=VALUE) or a message (-m)")
 	}
 
 	_, client, err := loadConfigAndClient()
@@ -101,6 +104,16 @@ func runVote(cmd *cobra.Command, args []string) error {
 	revision, err := getCurrentRevision(client, changeID)
 	if err != nil {
 		return err
+	}
+
+	// Message-only: post a plain change-level comment without touching any
+	// label, so it doesn't read as (or clobber) a vote.
+	if len(labels) == 0 {
+		if err := client.PostReview(changeID, revision, voteMessage); err != nil {
+			return fmt.Errorf("failed to post comment: %w", err)
+		}
+		fmt.Printf("%s Comment posted on %s\n", utils.Green("✓"), changeID)
+		return nil
 	}
 
 	if err := client.PostVote(changeID, revision, voteMessage, labels); err != nil {
