@@ -3,6 +3,7 @@ package cmd
 import (
 	"testing"
 
+	"github.com/drakeaharper/gerrit-cli/internal/config"
 	"github.com/drakeaharper/gerrit-cli/internal/gerrit"
 )
 
@@ -44,10 +45,58 @@ func TestIsReviewable(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isReviewable(tc.change); got != tc.want {
+			if got := isReviewable(tc.change, defaultReviewRules()); got != tc.want {
 				t.Fatalf("isReviewable = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// Config overrides the built-in rules: relaxing Code-Review to only block at -2,
+// and disabling the merge-conflict gate.
+func TestIsReviewableConfigOverride(t *testing.T) {
+	relaxed := reviewRulesFromConfig(&config.Config{
+		Reviewability: config.Reviewability{
+			BlockMergeConflict: boolPtr(false),
+			BlockingLabels:     map[string]int{"Code-Review": -2},
+		},
+	})
+
+	crMinus1 := changeWithLabels(map[string]interface{}{"Code-Review": restLabel(-1)})
+	if !isReviewable(crMinus1, relaxed) {
+		t.Fatal("Code-Review -1 should be reviewable when threshold is -2")
+	}
+
+	crMinus2 := changeWithLabels(map[string]interface{}{"Code-Review": restLabel(-2)})
+	if isReviewable(crMinus2, relaxed) {
+		t.Fatal("Code-Review -2 should still block at threshold -2")
+	}
+
+	conflict := gerrit.Change{Mergeable: boolPtr(false)}
+	if !isReviewable(conflict, relaxed) {
+		t.Fatal("merge conflict should be reviewable when block_merge_conflict is false")
+	}
+
+	// A label absent from the config map no longer blocks.
+	qaMinus1 := changeWithLabels(map[string]interface{}{"QA-Review": restLabel(-1)})
+	if !isReviewable(qaMinus1, relaxed) {
+		t.Fatal("QA-Review -1 should be reviewable when QA-Review is not a blocking label")
+	}
+}
+
+// An empty/zero config falls back to the built-in defaults.
+func TestReviewRulesFromConfigDefaults(t *testing.T) {
+	rules := reviewRulesFromConfig(&config.Config{})
+	if !rules.blockMergeConflict {
+		t.Fatal("default should block merge conflicts")
+	}
+	crMinus1 := changeWithLabels(map[string]interface{}{"Code-Review": restLabel(-1)})
+	if isReviewable(crMinus1, rules) {
+		t.Fatal("default rules should block Code-Review -1")
+	}
+	lintMinus1 := changeWithLabels(map[string]interface{}{"Lint-Review": restLabel(-1)})
+	if !isReviewable(lintMinus1, rules) {
+		t.Fatal("default rules should not block Lint-Review -1")
 	}
 }
 
@@ -56,14 +105,14 @@ func TestIsReviewableSSHFormat(t *testing.T) {
 	blocked := gerrit.Change{CurrentPatchSet: &gerrit.SSHPatchSet{
 		Approvals: []gerrit.ApprovalInfo{{Type: "Code-Review", Value: -1}},
 	}}
-	if isReviewable(blocked) {
+	if isReviewable(blocked, defaultReviewRules()) {
 		t.Fatal("SSH change with Code-Review -1 should not be reviewable")
 	}
 
 	ok := gerrit.Change{CurrentPatchSet: &gerrit.SSHPatchSet{
 		Approvals: []gerrit.ApprovalInfo{{Type: "Code-Review", Value: 2}},
 	}}
-	if !isReviewable(ok) {
+	if !isReviewable(ok, defaultReviewRules()) {
 		t.Fatal("SSH change with Code-Review +2 should be reviewable")
 	}
 }
@@ -76,7 +125,7 @@ func TestPartitionReviewable(t *testing.T) {
 		changeWithLabels(nil), // reviewable
 	}
 
-	reviewable, notReviewable := partitionReviewable(changes)
+	reviewable, notReviewable := partitionReviewable(changes, defaultReviewRules())
 	if len(reviewable) != 2 {
 		t.Fatalf("expected 2 reviewable, got %d", len(reviewable))
 	}

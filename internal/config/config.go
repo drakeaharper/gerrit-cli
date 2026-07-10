@@ -10,12 +10,49 @@ import (
 )
 
 type Config struct {
-	Server       string `json:"server"`
-	Port         int    `json:"port"`
-	HTTPPort     int    `json:"http_port,omitempty"`
-	User         string `json:"user"`
-	HTTPPassword string `json:"http_password,omitempty"`
-	Project      string `json:"project,omitempty"`
+	Server        string        `json:"server"`
+	Port          int           `json:"port"`
+	HTTPPort      int           `json:"http_port,omitempty"`
+	User          string        `json:"user"`
+	HTTPPassword  string        `json:"http_password,omitempty"`
+	Project       string        `json:"project,omitempty"`
+	Reviewability Reviewability `json:"reviewability,omitempty"`
+}
+
+// Reviewability controls which conditions mark a change as not reviewable in the
+// list/team split. All fields are optional; unset fields fall back to defaults
+// that reproduce the built-in behavior.
+type Reviewability struct {
+	// BlockMergeConflict, when set, controls whether a merge conflict makes a
+	// change not reviewable. Defaults to true when nil.
+	BlockMergeConflict *bool `json:"block_merge_conflict,omitempty"`
+	// BlockingLabels maps a label name to the vote threshold at or below which
+	// the change is not reviewable (a change blocks when its lowest vote for the
+	// label is <= the threshold). Nil falls back to DefaultBlockingLabels.
+	BlockingLabels map[string]int `json:"blocking_labels,omitempty"`
+}
+
+// DefaultBlockingLabels reproduces the built-in reviewability rules: Code-Review
+// and QA-Review block at -1 or below, Lint-Review only at -2.
+var DefaultBlockingLabels = map[string]int{
+	"Code-Review": -1,
+	"QA-Review":   -1,
+	"Lint-Review": -2,
+}
+
+// ReviewabilityRules returns the effective reviewability settings with defaults
+// applied for any unset field. The returned map is safe to read but must not be
+// mutated by callers.
+func (c *Config) ReviewabilityRules() (blockMergeConflict bool, blockingLabels map[string]int) {
+	blockMergeConflict = true
+	if c.Reviewability.BlockMergeConflict != nil {
+		blockMergeConflict = *c.Reviewability.BlockMergeConflict
+	}
+	blockingLabels = c.Reviewability.BlockingLabels
+	if blockingLabels == nil {
+		blockingLabels = DefaultBlockingLabels
+	}
+	return blockMergeConflict, blockingLabels
 }
 
 const (

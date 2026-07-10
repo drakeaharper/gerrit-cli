@@ -339,7 +339,15 @@ Configuration is stored in `~/.gerry/config.json`. You can also use environment 
   "http_port": 8080,
   "user": "your-username",
   "http_password": "your-http-password",
-  "project": "default-project"
+  "project": "default-project",
+  "reviewability": {
+    "block_merge_conflict": true,
+    "blocking_labels": {
+      "Code-Review": -1,
+      "QA-Review": -1,
+      "Lint-Review": -2
+    }
+  }
 }
 ```
 
@@ -351,6 +359,24 @@ Configuration is stored in `~/.gerry/config.json`. You can also use environment 
 - SSH key selection is handled by your SSH client configuration (`~/.ssh/config`)
   - Ensure your SSH keys are properly configured for the Gerrit server
   - The SSH client will use your default keys or those specified in `~/.ssh/config`
+
+#### Reviewability rules
+
+`gerry list --reviewer` and `gerry team` split changes into **Reviewable** and
+**Not reviewable** sections. The `reviewability` block controls what lands in
+"Not reviewable". It is optional — omit it entirely and the built-in defaults
+shown above apply.
+
+- `block_merge_conflict`: when `true` (default), a change with a merge conflict
+  is not reviewable (the author must rebase first). Set `false` to ignore it.
+- `blocking_labels`: maps a label name to a vote **threshold**. A change is not
+  reviewable when its lowest vote for that label is **at or below** the
+  threshold. Defaults: `Code-Review` and `QA-Review` block at `-1` (i.e. -1 or
+  -2), `Lint-Review` only at `-2`.
+  - To only treat `Code-Review -2` as blocking (e.g. so a sticky -2 that carries
+    across patchsets doesn't hide everything), set `"Code-Review": -2`.
+  - Remove a label from the map to stop it blocking at all.
+  - Add any custom label your Gerrit uses.
 
 Environment variables take precedence over configuration file values.
 

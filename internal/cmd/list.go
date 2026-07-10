@@ -76,7 +76,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		displayDetailedChanges(changes)
 	} else if reviewer {
 		// Reviewing others' changes: split into reviewable / not-reviewable.
-		displayReviewerSplitChanges(changes)
+		displayReviewerSplitChanges(changes, cfg)
 	} else {
 		displaySimpleChanges(changes)
 	}
@@ -122,10 +122,10 @@ func displaySimpleChanges(changes []gerrit.Change) {
 
 // displayReviewerSplitChanges renders the reviewer table split into two vertical
 // sections: reviewable and not reviewable.
-func displayReviewerSplitChanges(changes []gerrit.Change) {
+func displayReviewerSplitChanges(changes []gerrit.Change, cfg *config.Config) {
 	headers := []string{"Change", "Subject", "CR", "QR", "LR", "V", "M", "Updated"}
 
-	displayChangeSections(headers, changes, func(change gerrit.Change) []string {
+	displayChangeSections(headers, changes, reviewRulesFromConfig(cfg), func(change gerrit.Change) []string {
 		return []string{
 			utils.BoldCyan(change.ChangeNumberStr()),
 			utils.TruncateString(change.Subject, 60),

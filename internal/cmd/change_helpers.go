@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/drakeaharper/gerrit-cli/internal/config"
 	"github.com/drakeaharper/gerrit-cli/internal/gerrit"
 	"github.com/drakeaharper/gerrit-cli/internal/utils"
 )
@@ -134,32 +135,54 @@ func getLabelMinScore(change gerrit.Change, labelName string) (hasVote bool, min
 	return hasVote, min
 }
 
+// reviewRules holds the resolved reviewability criteria. Build one from config
+// via reviewRulesFromConfig, or use defaultReviewRules for the built-in rules.
+type reviewRules struct {
+	blockMergeConflict bool
+	// blockingLabels maps a label to the vote threshold at or below which the
+	// change is not reviewable.
+	blockingLabels map[string]int
+}
+
+// defaultReviewRules returns the built-in criteria: merge conflicts block, and
+// Code-Review/QA-Review block at -1 or below, Lint-Review only at -2.
+func defaultReviewRules() reviewRules {
+	return reviewRules{
+		blockMergeConflict: true,
+		blockingLabels:     config.DefaultBlockingLabels,
+	}
+}
+
+// reviewRulesFromConfig resolves the reviewability criteria from user config,
+// applying defaults for any unset field.
+func reviewRulesFromConfig(cfg *config.Config) reviewRules {
+	blockMergeConflict, blockingLabels := cfg.ReviewabilityRules()
+	return reviewRules{blockMergeConflict: blockMergeConflict, blockingLabels: blockingLabels}
+}
+
 // isReviewable reports whether a change is ready for a reviewer's eyes. A change
 // is not reviewable when it has a merge conflict (the author must rebase first)
-// or carries a blocking negative vote — Code-Review -1/-2, QA-Review -1, or
-// Lint-Review -2 — meaning the author still owes changes. Mergeability is only
+// or carries a blocking negative vote, per rules. Mergeability is only
 // considered when Gerrit reported it; an unknown state does not disqualify.
-func isReviewable(change gerrit.Change) bool {
-	if known, mergeable := change.MergeableState(); known && !mergeable {
-		return false
+func isReviewable(change gerrit.Change, rules reviewRules) bool {
+	if rules.blockMergeConflict {
+		if known, mergeable := change.MergeableState(); known && !mergeable {
+			return false
+		}
 	}
-	if hasVote, min := getLabelMinScore(change, "Code-Review"); hasVote && min < 0 {
-		return false
-	}
-	if hasVote, min := getLabelMinScore(change, "QA-Review"); hasVote && min < 0 {
-		return false
-	}
-	if hasVote, min := getLabelMinScore(change, "Lint-Review"); hasVote && min <= -2 {
-		return false
+	for label, threshold := range rules.blockingLabels {
+		if hasVote, min := getLabelMinScore(change, label); hasVote && min <= threshold {
+			return false
+		}
 	}
 	return true
 }
 
 // partitionReviewable splits changes into reviewable and not-reviewable buckets,
 // preserving the original ordering within each bucket.
-func partitionReviewable(changes []gerrit.Change) (reviewable, notReviewable []gerrit.Change) {
+func partitionReviewable(changes []gerrit.Change, rules reviewRules) (reviewable, notReviewable []gerrit.Change) {
 	for _, change := range changes {
-		if isReviewable(change) {
+		if isReviewable(change, rules) {
 			reviewable = append(reviewable, change)
 		} else {
 			notReviewable = append(notReviewable, change)
@@ -170,8 +193,8 @@ func partitionReviewable(changes []gerrit.Change) (reviewable, notReviewable []g
 
 // displayChangeSections renders two vertical sections — reviewable and not
 // reviewable — each as its own table. buildRow maps a change to a table row.
-func displayChangeSections(headers []string, changes []gerrit.Change, buildRow func(gerrit.Change) []string) {
-	reviewable, notReviewable := partitionReviewable(changes)
+func displayChangeSections(headers []string, changes []gerrit.Change, rules reviewRules, buildRow func(gerrit.Change) []string) {
+	reviewable, notReviewable := partitionReviewable(changes, rules)
 
 	printSection := func(title string, subset []gerrit.Change) {
 		fmt.Println(utils.BoldWhite(fmt.Sprintf("%s (%d)", title, len(subset))))

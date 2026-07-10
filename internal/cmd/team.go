@@ -82,7 +82,7 @@ func runTeam(cmd *cobra.Command, args []string) error {
 	if teamDetailed {
 		displayDetailedChanges(changes)
 	} else {
-		displayTeamSimpleChanges(changes)
+		displayTeamSimpleChanges(changes, cfg)
 	}
 	return nil
 }
@@ -104,10 +104,10 @@ func listTeamChangesSSH(cfg *config.Config, query string, limit int) ([]gerrit.C
 	return parseSSHChanges(output), nil
 }
 
-func displayTeamSimpleChanges(changes []gerrit.Change) {
+func displayTeamSimpleChanges(changes []gerrit.Change, cfg *config.Config) {
 	headers := []string{"Change", "Subject", "Owner", "CR", "QR", "LR", "V", "M", "Updated"}
 
-	displayChangeSections(headers, changes, func(change gerrit.Change) []string {
+	displayChangeSections(headers, changes, reviewRulesFromConfig(cfg), func(change gerrit.Change) []string {
 		return []string{
 			utils.BoldCyan(change.ChangeNumberStr()),
 			utils.TruncateString(change.Subject, 45),
