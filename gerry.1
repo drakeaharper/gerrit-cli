@@ -47,6 +47,55 @@ View comments on a specific change.
 Show all comments including resolved ones (default: unresolved only)
 .P
 Comments are grouped by file and formatted for easy reading in the terminal.
+.SS gerry comments mine [OPTIONS]
+Crawl every comment one person left across many changes. Gerrit has no
+"all comments by user" endpoint, so this walks the search API for matching
+changes and pulls each change's comments, keeping only those by the target
+author. Comments stay grouped into their reply threads.
+.TP
+.BR \-\-author " \fIACCOUNT\fR"
+Whose comments to collect: email, username, or \fBself\fR (default: self)
+.TP
+.BR \-\-owner " \fIACCOUNT\fR"
+Only crawl changes owned by this account
+.TP
+.BR \-\-project " \fIPROJECT\fR"
+Only crawl changes in this project
+.TP
+.BR \-\-status " \fISTATUS\fR"
+Only crawl changes with this status (open, merged, abandoned)
+.TP
+.BR \-\-since " \fIYYYY-MM-DD\fR"
+Only changes updated on or after this date
+.TP
+.BR \-\-until " \fIYYYY-MM-DD\fR"
+Only changes updated before this date
+.TP
+.BR \-q ", " \-\-query " \fITERMS\fR"
+Extra raw Gerrit query terms to AND in
+.TP
+.BR \-n ", " \-\-limit " \fIN\fR"
+Maximum changes to crawl (0 = all matching, the default)
+.TP
+.BR \-\-thread
+Include other people's comments in each matched thread, so threads read as conversations
+.TP
+.BR \-\-unresolved
+Only threads that are still unresolved (skips change-level messages)
+.TP
+.BR \-\-no\-messages
+Skip change-level messages; collect inline comments only
+.TP
+.BR \-f ", " \-\-format " \fIFORMAT\fR"
+Output format: text (default), json, markdown
+.TP
+.BR \-o ", " \-\-output " \fIFILE\fR"
+Write output to a file instead of stdout
+.TP
+.BR \-\-concurrency " \fIN\fR"
+Number of changes to fetch in parallel (default: 8)
+.P
+Crawl progress is written to stderr, so JSON output can be piped directly.
 .SS gerry details \fICHANGE-ID\fR [OPTIONS]
 Show comprehensive information about a change including files, reviewers, and scores.
 .TP

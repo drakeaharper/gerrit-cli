@@ -210,6 +210,53 @@ func (c *RESTClient) ListChanges(query string, limit int) ([]Change, error) {
 	return changes, nil
 }
 
+// ListChangesPage lists changes for a query starting at the given offset.
+// The caller paginates by advancing start until a page reports no _more_changes.
+func (c *RESTClient) ListChangesPage(query string, limit, start int) ([]Change, error) {
+	path := fmt.Sprintf("changes/?q=%s&n=%d&S=%d&o=CURRENT_REVISION&o=DETAILED_ACCOUNTS&o=SKIP_DIFFSTAT", query, limit, start)
+	resp, err := c.Get(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var changes []Change
+	if err := json.Unmarshal(resp, &changes); err != nil {
+		return nil, fmt.Errorf("failed to parse changes: %w", err)
+	}
+
+	return changes, nil
+}
+
+// QueryAccounts resolves accounts matching a query (email, username, or name).
+func (c *RESTClient) QueryAccounts(query string) ([]Account, error) {
+	resp, err := c.Get(fmt.Sprintf("accounts/?q=%s&o=DETAILS&n=10", query))
+	if err != nil {
+		return nil, err
+	}
+
+	var accounts []Account
+	if err := json.Unmarshal(resp, &accounts); err != nil {
+		return nil, fmt.Errorf("failed to parse accounts: %w", err)
+	}
+
+	return accounts, nil
+}
+
+// GetSelf retrieves the account of the authenticated user.
+func (c *RESTClient) GetSelf() (*Account, error) {
+	resp, err := c.Get("accounts/self")
+	if err != nil {
+		return nil, err
+	}
+
+	var account Account
+	if err := json.Unmarshal(resp, &account); err != nil {
+		return nil, fmt.Errorf("failed to parse account: %w", err)
+	}
+
+	return &account, nil
+}
+
 // GetChangeFiles retrieves the list of files in a change
 func (c *RESTClient) GetChangeFiles(changeID string, revision string) (map[string]FileInfo, error) {
 	path := fmt.Sprintf("changes/%s/revisions/%s/files", changeID, revision)

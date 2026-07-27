@@ -9,6 +9,7 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 - **Team Review**: See changes where you're a reviewer or CC'd with `gerry team`
 - **Share Changes**: Add reviewers and CCs to changes with `gerry share`
 - **Review Comments**: Read, reply to, add, resolve, and unresolve inline comments with `gerry comments` (supports batch posting)
+- **Review History**: Crawl every comment you (or anyone) left across many changes with `gerry comments mine`
 - **Vote on Changes**: Post label votes (Code-Review, QA-Review, Product-Review, Lint-Review, Verified) with `gerry vote`, or a message-only comment with `gerry comment`
 - **Change Details**: Get comprehensive change information with `gerry details`
 - **Local Workflow**: Fetch and cherry-pick changes with `gerry fetch` and `gerry cherry-pick`
@@ -169,6 +170,46 @@ Batch JSON shape:
   {"file": "util.go", "line": 7,  "message": "dead code"}
 ]
 ```
+
+**Crawling your own review history:**
+
+Gerrit has no "all comments by user" endpoint, so `gerry comments mine` walks the
+search API and pulls each matching change's comments, keeping the ones by the
+target author. Comments stay grouped into their reply threads.
+
+```bash
+# Everything you have ever said, newest change first
+gerry comments mine
+
+# Your review comments on one author's changes, as JSON for further analysis
+gerry comments mine --owner ashafovaloff@instructure.com --format json -o review-log.json
+
+# Include the replies you got, so each thread reads as a conversation
+gerry comments mine --owner ashafovaloff@instructure.com --thread
+
+# Only what is still unresolved, this quarter, in one repo
+gerry comments mine --unresolved --since 2026-04-01 --project canvas-lms
+
+# Someone else's review comments, as a markdown digest
+gerry comments mine --author ashafovaloff@instructure.com --format markdown
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--author` | Whose comments to collect (email, username, or `self`) |
+| `--owner` | Only changes owned by this account |
+| `--project` / `--status` | Narrow by repo or change status |
+| `--since` / `--until` | Date window on change update time (`YYYY-MM-DD`) |
+| `-q, --query` | Extra raw Gerrit query terms to AND in |
+| `-n, --limit` | Cap changes crawled (`0` = all matching) |
+| `--thread` | Keep other people's comments in each matched thread |
+| `--unresolved` | Only threads still unresolved (skips change-level messages) |
+| `--no-messages` | Inline comments only |
+| `-f, --format` | `text` (default), `json`, `markdown` |
+| `-o, --output` | Write to a file instead of stdout |
+| `--concurrency` | Changes fetched in parallel (default 8) |
+
+Progress goes to stderr, so `--format json` is safe to pipe straight into `jq`.
 
 **Voting on changes:**
 ```bash

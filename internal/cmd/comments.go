@@ -26,6 +26,7 @@ Subcommands:
   add        Add a new inline comment on a file
   resolve    Mark a comment thread as resolved
   unresolve  Mark a comment thread as unresolved
+  mine       Crawl every comment you left across many changes
 
 When called without a subcommand, displays comments on the change.`,
 	Args: cobra.ArbitraryArgs,
@@ -38,6 +39,7 @@ func init() {
 	commentsCmd.AddCommand(commentsAddCmd)
 	commentsCmd.AddCommand(commentsResolveCmd)
 	commentsCmd.AddCommand(commentsUnresolveCmd)
+	commentsCmd.AddCommand(commentsMineCmd)
 }
 
 func runComments(cmd *cobra.Command, args []string) error {
@@ -81,15 +83,19 @@ func runComments(cmd *cobra.Command, args []string) error {
 
 // Comment is the display-layer representation of a comment, normalized across API sources.
 type Comment struct {
-	ID         string
-	PatchSet   int
-	File       string
-	Line       int
-	Author     string
-	Message    string
-	Updated    string
-	Unresolved bool
-	InReplyTo  string
+	ID       string
+	PatchSet int
+	File     string
+	Line     int
+	Author   string
+	// AuthorEmail and AuthorID identify the author for filtering. Both are
+	// empty/zero on the SSH path, which only reports a display name.
+	AuthorEmail string
+	AuthorID    int
+	Message     string
+	Updated     string
+	Unresolved  bool
+	InReplyTo   string
 }
 
 func getCommentsREST(cfg *config.Config, changeID string) ([]Comment, error) {
@@ -140,15 +146,17 @@ func parseRESTComments(commentsData map[string][]gerrit.CommentInfo) []Comment {
 	for filename, fileComments := range commentsData {
 		for _, ci := range fileComments {
 			comments = append(comments, Comment{
-				ID:         ci.ID,
-				PatchSet:   ci.PatchSet,
-				File:       filename,
-				Line:       ci.Line,
-				Author:     ci.Author.DisplayName(),
-				Message:    ci.Message,
-				Updated:    ci.Updated,
-				Unresolved: ci.Unresolved,
-				InReplyTo:  ci.InReplyTo,
+				ID:          ci.ID,
+				PatchSet:    ci.PatchSet,
+				File:        filename,
+				Line:        ci.Line,
+				Author:      ci.Author.DisplayName(),
+				AuthorEmail: ci.Author.Email,
+				AuthorID:    ci.Author.AccountID,
+				Message:     ci.Message,
+				Updated:     ci.Updated,
+				Unresolved:  ci.Unresolved,
+				InReplyTo:   ci.InReplyTo,
 			})
 		}
 	}
