@@ -60,11 +60,15 @@ install-man: gerry.1
 
 install: build
 	@echo "Installing gerry..."
+# The destination is removed first: overwriting a Mach-O in place invalidates its
+# code signature on macOS, and the next `gerry` run dies with SIGKILL (exit 137).
 	@if [ -w /usr/local/bin ]; then \
+		rm -f /usr/local/bin/$(BINARY_NAME); \
 		cp $(OUTPUT_DIR)/$(BINARY_NAME) /usr/local/bin/$(BINARY_NAME); \
 		echo "Installed to /usr/local/bin/$(BINARY_NAME)"; \
 	else \
 		mkdir -p $(HOME)/bin; \
+		rm -f $(HOME)/bin/$(BINARY_NAME); \
 		cp $(OUTPUT_DIR)/$(BINARY_NAME) $(HOME)/bin/$(BINARY_NAME); \
 		echo "Installed to $(HOME)/bin/$(BINARY_NAME)"; \
 		echo "⚠️  Make sure $(HOME)/bin is in your PATH"; \
