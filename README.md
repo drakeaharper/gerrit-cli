@@ -7,7 +7,7 @@ A command-line interface for interacting with Gerrit Code Review, designed for d
 - **Easy Setup**: Interactive configuration wizard with `gerry init`
 - **List Changes**: View your open changes with `gerry list` (includes mergeable status)
 - **Team Review**: See changes where you're a reviewer or CC'd with `gerry team`
-- **Share Changes**: Add reviewers and CCs to changes with `gerry share`
+- **Share Changes**: Add reviewers and CCs to changes with `gerry share`, and remove them with `gerry unshare`
 - **Review Comments**: Read, reply to, add, resolve, and unresolve inline comments with `gerry comments` (supports batch posting)
 - **Review History**: Crawl every comment you (or anyone) left across many changes with `gerry comments mine`
 - **Vote on Changes**: Post label votes (Code-Review, QA-Review, Product-Review, Lint-Review, Verified) with `gerry vote`, or a message-only comment with `gerry comment`
@@ -117,6 +117,9 @@ gerry share 384465 -r alice -r bob
 
 # Mix reviewers and CCs
 gerry share 384465 -r lead-reviewer --cc my-team
+
+# Remove yourself as a reviewer (also deletes your votes)
+gerry unshare 384465
 ```
 
 **Working with your own changes:**
@@ -455,6 +458,17 @@ Examples:
 gerry share 12345 -r john.doe
 gerry share 12345 --cc learning-experience
 gerry share 12345 -r alice -r bob --cc my-team
+```
+
+### `gerry unshare <change-id>...`
+Remove reviewers or CCs from one or more changes. With no `-r`, removes you. Removing a reviewer also deletes any votes they cast.
+- `-r, --reviewer`: Reviewer or CC to remove (repeatable, default: you)
+
+Examples:
+```bash
+gerry unshare 12345
+gerry unshare 12345 23456 34567
+gerry unshare 12345 -r john.doe
 ```
 
 ### `gerry analyze`
