@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -346,6 +347,13 @@ func (c *RESTClient) AddReviewer(changeID string, reviewer string, state string)
 	}
 
 	_, err := c.Post(path, data)
+	return err
+}
+
+// RemoveReviewer removes a reviewer or CC from a change, along with any votes they cast.
+// account can be "self", a username, or an email.
+func (c *RESTClient) RemoveReviewer(changeID string, account string) error {
+	_, err := c.Post(fmt.Sprintf("changes/%s/reviewers/%s/delete", changeID, url.PathEscape(account)), map[string]interface{}{})
 	return err
 }
 
