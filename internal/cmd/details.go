@@ -152,38 +152,47 @@ func displayReviewLabels(change *gerrit.Change) {
 				continue
 			}
 
-			fmt.Printf("  %s: ", utils.BoldWhite(labelName))
-
-			if approved, ok := labelData["approved"].(map[string]interface{}); ok {
-				if value, ok := approved["value"]; ok {
-					fmt.Printf("%s by %s", utils.FormatScore(labelName, value), getAuthorName(approved))
-				}
-			} else if rejected, ok := labelData["rejected"].(map[string]interface{}); ok {
-				if value, ok := rejected["value"]; ok {
-					fmt.Printf("%s by %s", utils.FormatScore(labelName, value), getAuthorName(rejected))
-				}
-			} else if all, ok := labelData["all"].([]interface{}); ok && len(all) > 0 {
-				var votes []string
-				for _, vote := range all {
-					if voteData, ok := vote.(map[string]interface{}); ok {
-						if value, ok := voteData["value"]; ok {
-							votes = append(votes, fmt.Sprintf("%s by %s", utils.FormatScore(labelName, value), getAuthorName(voteData)))
-						}
-					}
-				}
-				if len(votes) > 0 {
-					fmt.Print(strings.Join(votes, ", "))
-				} else {
-					fmt.Print(utils.Gray("no votes"))
-				}
-			} else {
-				fmt.Print(utils.Gray("no votes"))
-			}
-			fmt.Println()
+			fmt.Printf("  %s: %s\n", utils.BoldWhite(labelName), formatLabelVotes(labelName, labelData))
 		}
 	} else {
 		fmt.Printf("  %s\n", utils.Gray("No review labels"))
 	}
+}
+
+// formatLabelVotes renders the votes cast on a single review label.
+//
+// The score of every voter is only reported in "all". The aggregate
+// "approved" / "rejected" entries are AccountInfo objects: they name the
+// deciding voter but carry no "value" field, so a label that already has a
+// verdict would render as an empty line when those entries are consulted
+// first.
+func formatLabelVotes(labelName string, labelData map[string]interface{}) string {
+	if all, ok := labelData["all"].([]interface{}); ok && len(all) > 0 {
+		votes := make([]string, 0, len(all))
+		for _, vote := range all {
+			voteData, ok := vote.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			value, ok := voteData["value"]
+			if !ok {
+				continue
+			}
+			votes = append(votes, fmt.Sprintf("%s by %s", utils.FormatScore(labelName, value), getAuthorName(voteData)))
+		}
+		if len(votes) > 0 {
+			return strings.Join(votes, ", ")
+		}
+	}
+
+	if approved, ok := labelData["approved"].(map[string]interface{}); ok {
+		return fmt.Sprintf("%s by %s", utils.Gray("approved"), getAuthorName(approved))
+	}
+	if rejected, ok := labelData["rejected"].(map[string]interface{}); ok {
+		return fmt.Sprintf("%s by %s", utils.Gray("rejected"), getAuthorName(rejected))
+	}
+
+	return utils.Gray("no votes")
 }
 
 func displayReviewers(change *gerrit.Change) {
